@@ -52,12 +52,14 @@ const (
 )
 
 var (
-	iterations     int
-	hostnetworking bool
-	tag            string
-	kubeConfig     string
-	netperfImage   string
-	cleanupOnly    bool
+	iterations         int
+	hostnetworking     bool
+	tag                string
+	kubeConfig         string
+	netperfImage       string
+	cleanupOnly        bool
+	backgroundPods     int
+	backgroundPodImage string
 
 	everythingSelector metav1.ListOptions = metav1.ListOptions{}
 
@@ -76,6 +78,10 @@ func init() {
 		"Location of the kube configuration file ($HOME/.kube/config")
 	flag.BoolVar(&cleanupOnly, "cleanup", false,
 		"(boolean) Run the cleanup resources phase only (use this flag to clean up orphaned resources from a test run)")
+	flag.IntVar(&backgroundPods, "backgroundPods", 0,
+		"Number of pods to run in the background")
+	flag.StringVar(&backgroundPodImage, "backgroundPodImage", "k8s.gcr.io/pause",
+		"Docker image used to run the background pods")
 }
 
 func setupClient() *kubernetes.Clientset {
@@ -304,6 +310,44 @@ func createRCs(c *kubernetes.Clientset) bool {
 	return true
 }
 
+// createPods - Create background pods for scalability tests
+func createPods(c *kubernetes.Clientset) bool {
+	name:= "netperf-background"
+	kubeNode := primaryNode.GetName()
+	for i := 1; i <= backgroundPods; i++ {
+		if i%2 == 0 {
+			kubeNode = secondaryNode.GetName()
+		} else {
+			kubeNode = primaryNode.GetName()
+		}
+		name = fmt.Sprintf("netperf-background-%d", i)
+		_, err := c.Core().Pods(testNamespace).Create(&api.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{"app": name},
+			},
+			Spec: api.PodSpec{
+				NodeName: kubeNode,
+				Containers: []api.Container{
+					{
+					Name:            name,
+					Image:           backgroundPodImage,
+					Ports:           []api.ContainerPort{},
+					Args:            []string{"--mode=background"},
+					ImagePullPolicy: "Always",
+					},
+				},
+				TerminationGracePeriodSeconds: new(int64),
+			},
+		})
+		if err != nil {
+			fmt.Println("Error creating background-%d pod", i, name, ":", err)
+			return false
+		}
+	}
+	return true
+}
+
 func getOrchestratorPodName(pods *api.PodList) string {
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.GetName(), "netperf-orch-") {
@@ -362,6 +406,10 @@ func executeTests(c *kubernetes.Clientset) bool {
 			return false
 		}
 		fmt.Println("Waiting for netperf pods to start up")
+		if !createPods(c) {
+			fmt.Println("Failed to create background pods - aborting test")
+			return false
+		}
 
 		var orchestratorPodName string
 		for len(orchestratorPodName) == 0 {
@@ -399,9 +447,11 @@ func main() {
 	flag.Parse()
 	fmt.Println("Network Performance Test")
 	fmt.Println("Parameters :")
-	fmt.Println("Iterations      : ", iterations)
-	fmt.Println("Host Networking : ", hostnetworking)
-	fmt.Println("Docker image    : ", netperfImage)
+	fmt.Println("Iterations           : ", iterations)
+	fmt.Println("Host Networking      : ", hostnetworking)
+	fmt.Println("Docker image         : ", netperfImage)
+	fmt.Println("Background pods      : ", backgroundPods)
+	fmt.Println("Background pod image : ", backgroundPodImage)
 	fmt.Println("------------------------------------------------------------")
 
 	var c *kubernetes.Clientset
