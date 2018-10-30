@@ -60,6 +60,7 @@ var (
 	cleanupOnly        bool
 	backgroundPods     int
 	backgroundPodImage string
+	extraServices      int
 
 	everythingSelector metav1.ListOptions = metav1.ListOptions{}
 
@@ -82,6 +83,8 @@ func init() {
 		"Number of pods to run in the background")
 	flag.StringVar(&backgroundPodImage, "backgroundPodImage", "k8s.gcr.io/pause",
 		"Docker image used to run the background pods")
+	flag.IntVar(&extraServices, "extraServices", 0,
+		"Number of services to run beside netperf-w2")
 }
 
 func setupClient() *kubernetes.Clientset {
@@ -178,41 +181,47 @@ func createServices(c *kubernetes.Clientset) bool {
 	fmt.Println("Created orchestrator service")
 
 	// Create the netperf-w2 service that points a clusterIP at the worker 2 pod
-	netperfW2Labels := map[string]string{"app": "netperf-w2"}
-	netperfW2Service := &api.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "netperf-w2",
-		},
-		Spec: api.ServiceSpec{
-			Selector: netperfW2Labels,
-			Ports: []api.ServicePort{
-				{
-					Name:       "netperf-w2",
-					Protocol:   api.ProtocolTCP,
-					Port:       iperf3Port,
-					TargetPort: intstr.FromInt(iperf3Port),
-				},
-				{
-					Name:       "netperf-w2-udp",
-					Protocol:   api.ProtocolUDP,
-					Port:       iperf3Port,
-					TargetPort: intstr.FromInt(iperf3Port),
-				},
-				{
-					Name:       "netperf-w2-netperf",
-					Protocol:   api.ProtocolTCP,
-					Port:       netperfPort,
-					TargetPort: intstr.FromInt(netperfPort),
-				},
+	for i := 0; i <= extraServices; i++ {
+		netperfW2Labels := map[string]string{"app": "netperf-w2"}
+		name := "netperf-w2"
+		if i>0 {
+			name = fmt.Sprintf("netperf-w2-%d", i)
+		}
+		netperfW2Service := &api.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
 			},
-			Type: api.ServiceTypeClusterIP,
-		},
+			Spec: api.ServiceSpec{
+				Selector: netperfW2Labels,
+				Ports: []api.ServicePort{
+					{
+						Name:       "netperf-w2",
+						Protocol:   api.ProtocolTCP,
+						Port:       iperf3Port,
+						TargetPort: intstr.FromInt(iperf3Port),
+					},
+					{
+						Name:       "netperf-w2-udp",
+						Protocol:   api.ProtocolUDP,
+						Port:       iperf3Port,
+						TargetPort: intstr.FromInt(iperf3Port),
+					},
+					{
+						Name:       "netperf-w2-netperf",
+						Protocol:   api.ProtocolTCP,
+						Port:       netperfPort,
+						TargetPort: intstr.FromInt(netperfPort),
+					},
+				},
+				Type: api.ServiceTypeClusterIP,
+			},
+		}
+		if _, err := c.Core().Services(testNamespace).Create(netperfW2Service); err != nil {
+			fmt.Println("Failed to create service", name, err)
+			return false
+		}
+		fmt.Println("Created service", name)
 	}
-	if _, err := c.Core().Services(testNamespace).Create(netperfW2Service); err != nil {
-		fmt.Println("Failed to create netperf-w2 service", err)
-		return false
-	}
-	fmt.Println("Created netperf-w2 service")
 	return true
 }
 
@@ -452,6 +461,7 @@ func main() {
 	fmt.Println("Docker image         : ", netperfImage)
 	fmt.Println("Background pods      : ", backgroundPods)
 	fmt.Println("Background pod image : ", backgroundPodImage)
+	fmt.Println("Extra services       : ", extraServices)
 	fmt.Println("------------------------------------------------------------")
 
 	var c *kubernetes.Clientset
