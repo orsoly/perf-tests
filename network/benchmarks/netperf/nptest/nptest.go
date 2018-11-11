@@ -441,6 +441,7 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 
 	var outputLog string
 	var bw string
+	var tr string
 	var cpuSender string
 	var cpuReceiver string
 
@@ -469,12 +470,20 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		bw = parseNetperfBandwidth(data.Output)
 		registerDataPoint(testcase.Label, 0, bw, currentJobIndex)
 		testcases[currentJobIndex].Finished = true
-
+	case netperfHTTPTest:
+		outputLog = outputLog + fmt.Sprintln("Received netperf (http) output from worker", data.Worker, "for test", testcase.Label,
+			"from", testcase.SourcePod, "to", testcase.DestinationPod) + data.Output
+		writeOutputFile(outputCaptureFile, outputLog)
+		tr = parseNetperfTransactionrate(data.Output)
+		registerDataPoint(testcase.Label, 0, tr, currentJobIndex)
+		testcases[currentJobIndex].Finished = true
 	}
 
 	switch data.Type {
 	case iperfTcpTest:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec. CPU usage sender was", cpuSender, "%. CPU usage receiver was", cpuReceiver, "%.")
+	case netperfHTTPTest:
+		fmt.Println("Jobdone from worker", data.Worker, "Transactionrate was", tr, "Trans/sec")
 	default:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec")
 	}
