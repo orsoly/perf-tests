@@ -58,6 +58,7 @@ var workerStateMap map[string]*workerState
 var iperfTCPOutputRegexp *regexp.Regexp
 var iperfUDPOutputRegexp *regexp.Regexp
 var netperfOutputRegexp *regexp.Regexp
+var netperfhttpOutputRegexp *regexp.Regexp
 var iperfCPUOutputRegexp *regexp.Regexp
 
 var dataPoints map[string][]point
@@ -178,6 +179,7 @@ func init() {
 	iperfTCPOutputRegexp = regexp.MustCompile("SUM.*\\s+(\\d+)\\sMbits/sec\\s+receiver")
 	iperfUDPOutputRegexp = regexp.MustCompile("\\s+(\\S+)\\sMbits/sec\\s+\\S+\\s+ms\\s+")
 	netperfOutputRegexp = regexp.MustCompile("\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\S+\\s+(\\S+)\\s+")
+	netperfhttpOutputRegexp = regexp.MustCompile("(\\S+).Trans\\S+\\s+")
 	iperfCPUOutputRegexp = regexp.MustCompile(`local/sender\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\),\sremote/receiver\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\)`)
 
 	dataPoints = make(map[string][]point)
@@ -426,6 +428,15 @@ func parseIperfCpuUsage(output string) (string, string) {
 func parseNetperfBandwidth(output string) string {
 	// Parses the output of netperf and grabs the Bbits/sec from the output
 	match := netperfOutputRegexp.FindStringSubmatch(output)
+	if match != nil && len(match) > 1 {
+		return match[1]
+	}
+	return "0"
+}
+
+func parseNetperfTransactionrate(output string) string {
+	// Parses the output of netperf and grabs the Bbits/sec from the output
+	match := netperfhttpOutputRegexp.FindStringSubmatch(output)
 	if match != nil && len(match) > 1 {
 		return match[1]
 	}
