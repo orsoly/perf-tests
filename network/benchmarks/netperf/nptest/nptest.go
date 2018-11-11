@@ -85,6 +85,7 @@ const (
 	iperfTcpTest = iota
 	iperfUdpTest = iota
 	netperfTest  = iota
+	netperfHTTPTest = iota
 )
 
 // NetPerfRpc service that exposes RegisterClient and ReceiveOutput for clients
@@ -292,7 +293,7 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 			}
 			return
 
-		case v.Type == netperfTest:
+		case v.Type == netperfTest || v.Type == netperfHTTPTest:
 			reply.ClientItem.Port = "12865"
 			return
 		}
@@ -532,6 +533,10 @@ func handleClientWorkItem(client *rpc.Client, workItem *WorkItem) {
 		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
 	case workItem.ClientItem.Type == netperfTest:
 		outputString := netperfClient(workItem.ClientItem.Host, workItem.ClientItem.Port, workItem.ClientItem.Type)
+		var reply int
+		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
+	case workItem.ClientItem.Type == netperfHTTPTest:
+		outputString := netperfHTTPClient(workItem.ClientItem.Host, workItem.ClientItem.Port, workItem.ClientItem.Type)
 		var reply int
 		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
 	}
