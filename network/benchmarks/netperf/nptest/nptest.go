@@ -170,7 +170,12 @@ func init() {
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "10 netperf. Same VM using Pod IP", Type: netperfTest, ClusterIP: false},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "11 netperf. Same VM using Virtual IP", Type: netperfTest, ClusterIP: true},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "12 netperf. Remote VM using Pod IP", Type: netperfTest, ClusterIP: false},
-		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "13 netperf. Remote VM using Virtual IP", Type: netperfTest, ClusterIP: true},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "13 netperf. Remote VM using Virtual IP", Type: netperfHTTPTest, ClusterIP: true},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "14 netperf HTTP. Same VM using Pod IP", Type: netperfHTTPTest, ClusterIP: false},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "15 netperf HTTP. Same VM using Virtual IP", Type: netperfHTTPTest, ClusterIP: true},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "16 netperf HTTP. Remote VM using Pod IP", Type: netperfHTTPTest, ClusterIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "17 netperf HTTP. Remote VM using Virtual IP", Type: netperfHTTPTest, ClusterIP: true},
+		{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Label: "18 netperf HTTP. Hairpin Pod to own Virtual IP", Type: netperfHTTPTest, ClusterIP: true},
 	}
 
 	currentJobIndex = 0
