@@ -637,6 +637,20 @@ func netperfClient(serverHost, serverPort string, workItemType int) (rv string) 
 	return
 }
 
+// Invoke and run a netperf http client and return the output if successful.
+func netperfHTTPClient(serverHost, serverPort string, workItemType int) (rv string) {
+	output, success := cmdExec(netperfPath, []string{netperfPath, "-H", serverHost, "-l", "20", "-P", "1", "-t",  "TCP_CRR", "--", "-r", "32,1024", "-o", "THROUGHPUT,THROUGHPUT_UNITS"}, 15)
+	if success {
+		fmt.Println(output)
+		rv = output
+	} else {
+		fmt.Println("Error running netperf client", output)
+	}
+
+	return
+}
+
+
 func cmdExec(command string, args []string, timeout int32) (rv string, rc bool) {
 	cmd := exec.Cmd{Path: command, Args: args}
 
