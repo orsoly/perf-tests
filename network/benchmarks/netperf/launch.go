@@ -61,6 +61,7 @@ var (
 	backgroundPods     int
 	backgroundPodImage string
 	extraServices      int
+	extraNetperfPods   int
 
 	everythingSelector metav1.ListOptions = metav1.ListOptions{}
 
@@ -85,6 +86,8 @@ func init() {
 		"Docker image used to run the background pods")
 	flag.IntVar(&extraServices, "extraServices", 0,
 		"Number of services to run beside netperf-w2")
+	flag.IntVar(&extraNetperfPods, "extraNetperfPods", 0,
+		"Number of extra netperf-w2 pods")
 }
 
 func setupClient() *kubernetes.Clientset {
@@ -284,14 +287,22 @@ func createRCs(c *kubernetes.Clientset) bool {
 
 		replicas := int32(1)
 
+		label := map[string]string{"app": name}
+		selector := map[string]string{"app": name}
+
+		if (i == 2 && extraNetperfPods > 0) {
+			label = map[string]string{"app": name, "rcselector": "replicaforw2"}
+			selector = map[string]string{"rcselector": "replicaforw2"}
+		}
+
 		_, err := c.Core().ReplicationControllers(testNamespace).Create(&api.ReplicationController{
 			ObjectMeta: metav1.ObjectMeta{Name: name},
 			Spec: api.ReplicationControllerSpec{
 				Replicas: &replicas,
-				Selector: map[string]string{"app": name},
+				Selector: selector,
 				Template: &api.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{"app": name},
+						Labels: label,
 					},
 					Spec: api.PodSpec{
 						NodeName: kubeNode,
@@ -321,15 +332,16 @@ func createRCs(c *kubernetes.Clientset) bool {
 
 // createPods - Create background pods for scalability tests
 func createPods(c *kubernetes.Clientset) bool {
-	name:= "netperf-background"
+	name := "netperf-background"
 	kubeNode := primaryNode.GetName()
+	portSpec := []api.ContainerPort{}
 	for i := 1; i <= backgroundPods; i++ {
 		if i%2 == 0 {
 			kubeNode = secondaryNode.GetName()
 		} else {
 			kubeNode = primaryNode.GetName()
 		}
-		name = fmt.Sprintf("netperf-background-%d", i)
+		name = fmt.Sprintf("netperf-background-%03d", i)
 		_, err := c.Core().Pods(testNamespace).Create(&api.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
@@ -341,8 +353,8 @@ func createPods(c *kubernetes.Clientset) bool {
 					{
 					Name:            name,
 					Image:           backgroundPodImage,
-					Ports:           []api.ContainerPort{},
-					Args:            []string{"--mode=background"},
+					Ports:           portSpec,
+					Args:            []string{"--mode=worker"},
 					ImagePullPolicy: "Always",
 					},
 				},
@@ -350,7 +362,36 @@ func createPods(c *kubernetes.Clientset) bool {
 			},
 		})
 		if err != nil {
-			fmt.Println("Error creating background-%d pod", i, name, ":", err)
+			fmt.Printf("Error creating %s pod", name, ":", err)
+			return false
+		}
+	}
+
+	kubeNode = primaryNode.GetName()
+	portSpec = append(portSpec, api.ContainerPort{ContainerPort: iperf3Port, Protocol: api.ProtocolTCP})
+	for i := 1; i <= extraNetperfPods; i++ {
+		name = fmt.Sprintf("netperf-w2-%03d", i)
+		_, err := c.Core().Pods(testNamespace).Create(&api.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{"app": "netperf-w2"},
+			},
+			Spec: api.PodSpec{
+				NodeName: kubeNode,
+				Containers: []api.Container{
+					{
+					Name:            name,
+					Image:           netperfImage,
+					Ports:           portSpec,
+					Args:            []string{"--mode=worker"},
+					ImagePullPolicy: "Always",
+					},
+				},
+				TerminationGracePeriodSeconds: new(int64),
+			},
+		})
+		if err != nil {
+			fmt.Printf("Error creating %s pod", name, ":", err)
 			return false
 		}
 	}
@@ -462,6 +503,7 @@ func main() {
 	fmt.Println("Background pods      : ", backgroundPods)
 	fmt.Println("Background pod image : ", backgroundPodImage)
 	fmt.Println("Extra services       : ", extraServices)
+	fmt.Println("Extra netperf pods   : ", extraNetperfPods)
 	fmt.Println("------------------------------------------------------------")
 
 	var c *kubernetes.Clientset
