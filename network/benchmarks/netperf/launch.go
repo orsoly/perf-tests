@@ -49,6 +49,7 @@ const (
 	orchestratorPort = 5202
 	iperf3Port       = 5201
 	netperfPort      = 12865
+	nodePort         = 30000
 )
 
 var (
@@ -65,8 +66,10 @@ var (
 
 	everythingSelector metav1.ListOptions = metav1.ListOptions{}
 
-	primaryNode   api.Node
-	secondaryNode api.Node
+	primaryNode     api.Node
+	secondaryNode   api.Node
+	primaryNodeIP   string
+	secondaryNodeIP string
 )
 
 func init() {
@@ -116,6 +119,17 @@ func getMinionNodes(c *kubernetes.Clientset) *api.NodeList {
 	return nodes
 }
 
+//get the Internal IP address of a node
+func getNodeIP(n *api.Node) string {
+	nodeIP := ""
+	for _, addr := range n.Status.Addresses {
+		if addr.Type == api.NodeInternalIP {
+			nodeIP = addr.Address
+		}
+	}
+	return nodeIP
+}
+
 func cleanup(c *kubernetes.Clientset) {
 	// Cleanup existing rcs, pods and services in our namespace
 	rcs, err := c.Core().ReplicationControllers(testNamespace).List(everythingSelector)
@@ -153,7 +167,7 @@ func cleanup(c *kubernetes.Clientset) {
 	}
 }
 
-// createServices: Long-winded function to programmatically create our two services
+// createServices: Long-winded function to programmatically create our three services
 func createServices(c *kubernetes.Clientset) bool {
 	// Create our namespace if not present
 	if _, err := c.Core().Namespaces().Get(testNamespace, metav1.GetOptions{}); err != nil {
@@ -225,6 +239,45 @@ func createServices(c *kubernetes.Clientset) bool {
 		}
 		fmt.Println("Created service", name)
 	}
+
+	// Create the netperf-w4 service that points a clusterIP at the worker 4 pod and exposes a NodePort
+	netperfW4Labels := map[string]string{"app": "netperf-w4"}
+	netperfW4Service := &api.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "netperf-w4",
+		},
+		Spec: api.ServiceSpec{
+			Selector: netperfW4Labels,
+			Ports: []api.ServicePort{
+				{
+					Name:       "netperf-w4",
+					Protocol:   api.ProtocolTCP,
+					Port:       iperf3Port,
+					TargetPort: intstr.FromInt(iperf3Port),
+					NodePort:   nodePort,
+				},
+				{
+					Name:       "netperf-w4-udp",
+					Protocol:   api.ProtocolUDP,
+					Port:       iperf3Port,
+					TargetPort: intstr.FromInt(iperf3Port),
+					NodePort:    nodePort,
+				},
+				{
+					Name:       "netperf-w4-netperf",
+					Protocol:   api.ProtocolTCP,
+					Port:       netperfPort,
+					TargetPort: intstr.FromInt(netperfPort),
+				},
+			},
+			Type: api.ServiceTypeNodePort,
+		},
+	}
+	if _, err := c.Core().Services(testNamespace).Create(netperfW4Service); err != nil {
+		fmt.Println("Failed to create netperf-w4 service", err)
+		return false
+	}
+	fmt.Println("Created netperf-w4 service")
 	return true
 }
 
@@ -264,7 +317,8 @@ func createRCs(c *kubernetes.Clientset) bool {
 		return false
 	}
 	fmt.Println("Created orchestrator replication controller")
-	for i := 1; i <= 3; i++ {
+	//Create worker RCs
+	for i := 1; i <= 4; i++ {
 		// Bring up pods slowly
 		time.Sleep(3 * time.Second)
 		kubeNode := primaryNode.GetName()
@@ -283,6 +337,9 @@ func createRCs(c *kubernetes.Clientset) bool {
 			{Name: "worker", Value: name},
 			{Name: "kubeNode", Value: kubeNode},
 			{Name: "podname", Value: name},
+			{Name: "primaryNodeIP", Value: primaryNodeIP},
+			{Name: "secondaryNodeIP", Value: secondaryNodeIP},
+			{Name: "nodePort", Value: fmt.Sprintf("%d", nodePort)},
 		}
 
 		replicas := int32(1)
@@ -526,6 +583,14 @@ func main() {
 	primaryNode = nodes.Items[0]
 	secondaryNode = nodes.Items[1]
 	fmt.Printf("Selected primary,secondary nodes = (%s, %s)\n", primaryNode.GetName(), secondaryNode.GetName())
+	primaryNodeIP = getNodeIP(&primaryNode)
+	secondaryNodeIP = getNodeIP(&secondaryNode)
+	if (primaryNodeIP == "" || secondaryNodeIP == "") {
+		fmt.Println("Failed to get node IPs")
+		return
+	} else {
+		fmt.Printf("Primary node IP = %s, secondary node IP = %s\n", primaryNodeIP, secondaryNodeIP)
+	}
 	executeTests(c)
 	cleanup(c)
 }

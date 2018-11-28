@@ -52,6 +52,9 @@ var host string
 var worker string
 var kubenode string
 var podname string
+var primaryNodeIP string
+var secondaryNodeIP string
+var nodePort string
 
 var workerStateMap map[string]*workerState
 
@@ -92,10 +95,13 @@ type NetPerfRpc int
 
 // ClientRegistrationData stores a data about a single client
 type ClientRegistrationData struct {
-	Host     string
-	KubeNode string
-	Worker   string
-	IP       string
+	Host            string
+	KubeNode        string
+	Worker          string
+	IP              string
+	PrimaryNodeIP   string
+	SecondaryNodeIP string
+	NodePort        string
 }
 
 // IperfClientWorkItem represents a single task for an Iperf client
@@ -122,10 +128,13 @@ type WorkItem struct {
 }
 
 type workerState struct {
-	sentServerItem bool
-	idle           bool
-	IP             string
-	worker         string
+	sentServerItem  bool
+	idle            bool
+	IP              string
+	worker          string
+	primaryNodeIP   string
+	secondaryNodeIP string
+	nodePort        string
 }
 
 // WorkerOutput stores the results from a single worker
@@ -137,13 +146,14 @@ type WorkerOutput struct {
 }
 
 type testcase struct {
-	SourceNode      string
-	DestinationNode string
-	Label           string
-	ClusterIP       bool
-	Finished        bool
-	MSS             int
-	Type            int
+	SourceNode       string
+	DestinationNode  string
+	Label            string
+	ClusterIP        bool
+	Finished         bool
+	MSS              int
+	Type             int
+	UsePrimaryNodeIP bool
 }
 
 var testcases []*testcase
@@ -169,6 +179,12 @@ func init() {
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "11 netperf. Same VM using Virtual IP", Type: netperfTest, ClusterIP: true},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "12 netperf. Remote VM using Pod IP", Type: netperfTest, ClusterIP: false},
 		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "13 netperf. Remote VM using Virtual IP", Type: netperfTest, ClusterIP: true},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "14 iperf TCP. Same VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "15 iperf TCP. Same VM, secondary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "16 iperf TCP. Remote VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "17 iperf UDP. Same VM, primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "18 iperf UDP. Same VM, primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "19 iperf UDP. Remote VM,  primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
 	}
 
 	currentJobIndex = 0
@@ -213,6 +229,9 @@ func grabEnv() {
 	worker = os.Getenv("worker")
 	kubenode = os.Getenv("kubenode")
 	podname = os.Getenv("HOSTNAME")
+	primaryNodeIP = os.Getenv("primaryNodeIP")
+	secondaryNodeIP = os.Getenv("secondaryNodeIP")
+	nodePort = os.Getenv("nodePort")
 }
 
 func validateParams() (rv bool) {
@@ -276,14 +295,25 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 		currentJobIndex = n
 
 		if !v.ClusterIP {
-			reply.ClientItem.Host = getWorkerPodIP(v.DestinationNode)
+			//netperf-w4 pod is for NodePort measurements
+			if v.DestinationNode == "netperf-w4" {
+				reply.ClientItem.Port = workerS.nodePort
+				if v.UsePrimaryNodeIP {
+					reply.ClientItem.Host = workerS.primaryNodeIP
+				} else {
+					reply.ClientItem.Host = workerS.secondaryNodeIP
+				}
+			} else {
+				reply.ClientItem.Host = getWorkerPodIP(v.DestinationNode)
+				reply.ClientItem.Port = "5201"
+			}
 		} else {
 			reply.ClientItem.Host = os.Getenv("NETPERF_W2_SERVICE_HOST")
+			reply.ClientItem.Port = "5201"
 		}
 
 		switch {
 		case v.Type == iperfTcpTest || v.Type == iperfUdpTest:
-			reply.ClientItem.Port = "5201"
 			reply.ClientItem.MSS = v.MSS
 
 			v.MSS = v.MSS + mssStepSize
@@ -322,7 +352,7 @@ func (t *NetPerfRpc) RegisterClient(data *ClientRegistrationData, reply *WorkIte
 
 	if !ok {
 		// For new clients, trigger an iperf server start immediately
-		state = &workerState{sentServerItem: true, idle: true, IP: data.IP, worker: data.Worker}
+		state = &workerState{sentServerItem: true, idle: true, IP: data.IP, worker: data.Worker, primaryNodeIP: data.PrimaryNodeIP, secondaryNodeIP: data.SecondaryNodeIP, nodePort: data.NodePort}
 		workerStateMap[data.Worker] = state
 		reply.IsServerItem = true
 		reply.ServerItem.ListenPort = "5201"
@@ -558,7 +588,7 @@ func startWork() {
 		}
 
 		for true {
-			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP()}
+			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP(), PrimaryNodeIP: primaryNodeIP, SecondaryNodeIP: secondaryNodeIP, NodePort: nodePort}
 			var workItem WorkItem
 
 			if err := client.Call("NetPerfRpc.RegisterClient", clientData, &workItem); err != nil {
@@ -605,13 +635,13 @@ func netperfServer() {
 func iperfClient(serverHost, serverPort string, mss int, workItemType int) (rv string) {
 	switch {
 	case workItemType == iperfTcpTest:
-		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-V", "-N", "-i", "30", "-t", "10", "-f", "m", "-w", "512M", "-Z", "-P", parallelStreams, "-M", strconv.Itoa(mss)}, 15)
+		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-p", serverPort, "-V", "-N", "-i", "30", "-t", "10", "-f", "m", "-w", "512M", "-Z", "-P", parallelStreams, "-M", strconv.Itoa(mss)}, 15)
 		if success {
 			rv = output
 		}
 
 	case workItemType == iperfUdpTest:
-		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-i", "30", "-t", "10", "-f", "m", "-b", "0", "-u"}, 15)
+		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-p", serverPort, "-i", "30", "-t", "10", "-f", "m", "-b", "0", "-u"}, 15)
 		if success {
 			rv = output
 		}
