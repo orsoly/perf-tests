@@ -1,59 +1,60 @@
+# ASSUMPTIONS:
+# - Underlying cluster should have 100+ nodes.
+# - Number of nodes should be divisible by NODES_PER_NAMESPACE (default 100).
+
 #Constants
 {{$BIG_GROUP_SIZE := 250}}
 {{$MEDIUM_GROUP_SIZE := 30}}
 {{$SMALL_GROUP_SIZE := 5}}
-{{$PODS_PER_NODE := 30}}
 {{$NODES_PER_NAMESPACE := 100}}
-#Variables
+{{$PODS_PER_NODE := 30}}
+{{$TEST_THROUGHPUT := 10}}
 # bigRCs - 1/4 of all pods should be in big RCs.
-{{$bigRCs := MultiplyInt .Nodes 0.03}}
+{{$BIG_RCS_PER_NAMESPACE := 3}}
 # mediumRCs - 1/4 of all pods should be in medium RCs.
-{{$mediumRCs := MultiplyInt .Nodes 0.25}}
+{{$MEDIUM_RCS_PER_NAMESPACE := 25}}
 # smallRCs - 1/2 of all pods should be in small RCs.
-{{$smallRCs := MultiplyInt .Nodes 3}}
-{{$namespaces := DivideInt (SubtractInt .Nodes 1) $NODES_PER_NAMESPACE | AddInt 1}}
-{{$bigRCsPerNamespace := DivideInt $bigRCs $namespaces}}
-{{$mediumRCsPerNamespace := DivideInt $mediumRCs $namespaces}}
-{{$smallRCsPerNamespace := DivideInt $smallRCs $namespaces}}
-{{$totalPodsRounded := AddInt (MultiplyInt $bigRCs $BIG_GROUP_SIZE) (MultiplyInt $mediumRCs $MEDIUM_GROUP_SIZE) (MultiplyInt $smallRCs $SMALL_GROUP_SIZE)}}
-# saturationQPS - qps for RC operations should be an equivalent to 10 [pods/s].
-{{$saturationQPS := DivideFloat (AddInt $bigRCs $mediumRCs $smallRCs) (DivideFloat $totalPodsRounded 10)}}
-#Test
+{{$SMALL_RCS_PER_NAMESPACE := 300}}
+
+#Variables
+{{$namespaces := DivideInt .Nodes $NODES_PER_NAMESPACE}}
+{{$totalPods := MultiplyInt $namespaces $NODES_PER_NAMESPACE $PODS_PER_NODE}}
+{{$saturationTime := DivideInt $totalPods $TEST_THROUGHPUT}}
+
+
 name: load
 automanagedNamespaces: {{$namespaces}}
 tuningSets:
-- name: AvgSaturationQPS
-  randomizedLoad:
-    averageQps: {{$saturationQPS}}
-- name: AvgScalingQPS
-  randomizedLoad:
+- name: RandomizedSaturationTimeLimited
+  RandomizedTimeLimitedLoad:
+    timeLimit: {{$saturationTime}}s
+- name: RandomizedScalingTimeLimited
+  RandomizedTimeLimitedLoad:
     # The expected number of created/deleted pods is totalPods/4 when scaling,
     # as each RC changes its size from X to a uniform random value in [X/2, 3X/2].
-    # To match 10 [pods/s] requirement, we need to multiply saturationQPS by 4.
-    averageQps: {{MultiplyFloat $saturationQPS 4}}
+    # To match 10 [pods/s] requirement, we need to divide saturationTime by 4.
+    timeLimit: {{DivideInt $saturationTime 4}}s
 steps:
 - measurements:
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: Global
-      action: start
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: CreatePods
-      action: start
   - Identifier: APIResponsiveness
     Method: APIResponsiveness
     Params:
       action: reset
 # Create RCs
+- measurements:
+  - Identifier: WaitForRunningRCs
+    Method: WaitForControlledPodsRunning
+    Params:
+      action: start
+      kind: ReplicationController
+      labelSelector: group = load
+      operationTimeout: 10m
 - phases:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
-    replicasPerNamespace: {{$bigRCsPerNamespace}}
-    tuningSet: AvgSaturationQPS
+    replicasPerNamespace: {{$BIG_RCS_PER_NAMESPACE}}
+    tuningSet: RandomizedSaturationTimeLimited
     objectBundle:
     - basename: big-service
       objectTemplatePath: service.yaml
@@ -67,8 +68,8 @@ steps:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
-    replicasPerNamespace: {{$mediumRCsPerNamespace}}
-    tuningSet: AvgSaturationQPS
+    replicasPerNamespace: {{$MEDIUM_RCS_PER_NAMESPACE}}
+    tuningSet: RandomizedSaturationTimeLimited
     objectBundle:
     - basename: medium-service
       objectTemplatePath: service.yaml
@@ -82,8 +83,8 @@ steps:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
-    replicasPerNamespace: {{$smallRCsPerNamespace}}
-    tuningSet: AvgSaturationQPS
+    replicasPerNamespace: {{$SMALL_RCS_PER_NAMESPACE}}
+    tuningSet: RandomizedSaturationTimeLimited
     objectBundle:
     - basename: small-service
       objectTemplatePath: service.yaml
@@ -98,28 +99,15 @@ steps:
   - Identifier: WaitForRunningRCs
     Method: WaitForControlledPodsRunning
     Params:
-      kind: ReplicationController
-      labelSelector: kind = loadRC
-      # timeout = (totalPodsRounded /20)s + 3m
-      timeout: {{DivideInt $totalPodsRounded 20 | AddInt 180}}s
-- measurements:
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: CreatePods
-      action: stop
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: ScaleRCs
-      action: start
+      action: gather
+- name: Creating RCs
 # Scale RCs
 - phases:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
-    replicasPerNamespace: {{$bigRCsPerNamespace}}
-    tuningSet: AvgSaturationQPS
+    replicasPerNamespace: {{$BIG_RCS_PER_NAMESPACE}}
+    tuningSet: RandomizedScalingTimeLimited
     objectBundle:
     - basename: big-rc
       objectTemplatePath: rc.yaml
@@ -129,8 +117,8 @@ steps:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
-    replicasPerNamespace: {{$mediumRCsPerNamespace}}
-    tuningSet: AvgSaturationQPS
+    replicasPerNamespace: {{$MEDIUM_RCS_PER_NAMESPACE}}
+    tuningSet: RandomizedScalingTimeLimited
     objectBundle:
     - basename: medium-rc
       objectTemplatePath: rc.yaml
@@ -140,8 +128,8 @@ steps:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
-    replicasPerNamespace: {{$smallRCsPerNamespace}}
-    tuningSet: AvgSaturationQPS
+    replicasPerNamespace: {{$SMALL_RCS_PER_NAMESPACE}}
+    tuningSet: RandomizedScalingTimeLimited
     objectBundle:
     - basename: small-rc
       objectTemplatePath: rc.yaml
@@ -149,30 +137,18 @@ steps:
         ReplicasMin: {{MultiplyInt $SMALL_GROUP_SIZE 0.5}}
         ReplicasMax: {{MultiplyInt $SMALL_GROUP_SIZE 1.5}}
 - measurements:
-  - Identifier: WaitForScaledRCsRunning
+  - Identifier: WaitForRunningRCs
     Method: WaitForControlledPodsRunning
     Params:
-      kind: ReplicationController
-      labelSelector: kind = loadRC
-      timeout: 10m
-- measurements:
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: ScaleRCs
-      action: stop
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: DeleteAllPods
-      action: start
+      action: gather
+- name: Scaling RCs
 # Delete RCs
 - phases:
   - namespaceRange:
       min: 1
       max: {{$namespaces}}
     replicasPerNamespace: 0
-    tuningSet: AvgSaturationQPS
+    tuningSet: RandomizedSaturationTimeLimited
     objectBundle:
     - basename: big-service
       objectTemplatePath: service.yaml
@@ -182,7 +158,7 @@ steps:
       min: 1
       max: {{$namespaces}}
     replicasPerNamespace: 0
-    tuningSet: AvgSaturationQPS
+    tuningSet: RandomizedSaturationTimeLimited
     objectBundle:
     - basename: medium-service
       objectTemplatePath: service.yaml
@@ -192,30 +168,20 @@ steps:
       min: 1
       max: {{$namespaces}}
     replicasPerNamespace: 0
-    tuningSet: AvgSaturationQPS
+    tuningSet: RandomizedSaturationTimeLimited
     objectBundle:
     - basename: small-service
       objectTemplatePath: service.yaml
     - basename: small-rc
       objectTemplatePath: rc.yaml
+- name: Deleting RCs
+- measurements:
+  - Identifier: WaitForRunningRCs
+    Method: WaitForControlledPodsRunning
+    Params:
+      action: gather
 - measurements:
   - Identifier: APIResponsiveness
     Method: APIResponsiveness
-    Params:
-      action: gather
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: DeleteAllPods
-      action: stop
-- measurements:
-  - Identifier: PhaseTimer
-    Method: Timer
-    Params:
-      label: Global
-      action: stop
-- measurements:
-  - Identifier: PhaseTimer
-    Method: Timer
     Params:
       action: gather
