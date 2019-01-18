@@ -66,6 +66,7 @@ var (
 	extraNetperfPods   int
 	ingressNPs         int
 	egressNPs          int
+	mssStepSize		   int
 
 	everythingSelector metav1.ListOptions = metav1.ListOptions{}
 
@@ -98,6 +99,8 @@ func init() {
 		"Number of ingress policies to run")
 	flag.IntVar(&egressNPs, "egressNPs", 0,
 		"Number of egress policies to run")
+	flag.IntVar(&mssStepSize, "mssStepSize", 0,
+		"Step size of TCP MSS")
 }
 
 func setupClient() *kubernetes.Clientset {
@@ -326,6 +329,9 @@ func createRCs(c *kubernetes.Clientset) bool {
 							Image:           netperfImage,
 							Ports:           []api.ContainerPort{{ContainerPort: orchestratorPort}},
 							Args:            []string{"--mode=orchestrator"},
+							Env:			 []api.EnvVar{
+											     {Name: "mssStepSize", Value: fmt.Sprintf("%d", mssStepSize)},
+											 },
 							ImagePullPolicy: "Always",
 						},
 					},
