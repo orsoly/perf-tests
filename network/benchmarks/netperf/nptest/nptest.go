@@ -55,6 +55,7 @@ var podname string
 var primaryNodeIP string
 var secondaryNodeIP string
 var nodePort string
+var mssStepSize int
 
 var workerStateMap map[string]*workerState
 
@@ -78,7 +79,6 @@ const (
 	outputCaptureFile    = "/tmp/output.txt"
 	mssMin               = 96
 	mssMax               = 1460
-	mssStepSize          = 64
 	parallelStreams      = "8"
 	rpcServicePort       = "5202"
 	localhostIPv4Address = "127.0.0.1"
@@ -163,6 +163,14 @@ func init() {
 	flag.StringVar(&mode, "mode", "worker", "Mode for the daemon (worker | orchestrator)")
 	flag.StringVar(&port, "port", rpcServicePort, "Port to listen on (defaults to 5202)")
 	flag.StringVar(&host, "host", "", "IP address to bind to (defaults to 0.0.0.0)")
+
+	var err error
+
+        s := os.Getenv("mssStepSize")
+        mssStepSize, err = strconv.Atoi(s)
+        if err != nil {
+                fmt.Println(err)
+        }
 
 	workerStateMap = make(map[string]*workerState)
 	testcases = []*testcase{
@@ -288,6 +296,12 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 			reply.IsIdle = true
 			return
 		}
+
+		if mssStepSize == 0 {
+			v.MSS = mssMax
+			v.Finished = true
+		}
+
 		fmt.Printf("Requesting jobrun '%s' from %s to %s for MSS %d\n", v.Label, v.SourceNode, v.DestinationNode, v.MSS)
 		reply.ClientItem.Type = v.Type
 		reply.IsClientItem = true
