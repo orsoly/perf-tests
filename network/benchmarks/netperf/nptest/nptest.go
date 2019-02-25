@@ -63,6 +63,7 @@ var iperfTCPOutputRegexp *regexp.Regexp
 var iperfUDPOutputRegexp *regexp.Regexp
 var netperfOutputRegexp *regexp.Regexp
 var iperfCPUOutputRegexp *regexp.Regexp
+var fortioOutputRegexp *regexp.Regexp
 
 var dataPoints map[string][]point
 var dataPointKeys []string
@@ -76,6 +77,7 @@ const (
 	iperf3Path           = "/usr/bin/iperf3"
 	netperfPath          = "/usr/local/bin/netperf"
 	netperfServerPath    = "/usr/local/bin/netserver"
+	fortioPath           = "/usr/bin/fortio"
 	outputCaptureFile    = "/tmp/output.txt"
 	mssMin               = 96
 	mssMax               = 1460
@@ -88,6 +90,7 @@ const (
 	iperfTcpTest = iota
 	iperfUdpTest = iota
 	netperfTest  = iota
+	fortioTest   = iota
 )
 
 // NetPerfRpc service that exposes RegisterClient and ReceiveOutput for clients
@@ -174,6 +177,8 @@ func init() {
 
 	workerStateMap = make(map[string]*workerState)
 	testcases = []*testcase{
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "0 fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "0 fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "1 iperf TCP. Same VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "2 iperf TCP. Same VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "3 iperf TCP. Remote VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
@@ -202,6 +207,7 @@ func init() {
 	iperfUDPOutputRegexp = regexp.MustCompile("\\s+(\\S+)\\sMbits/sec\\s+\\S+\\s+ms\\s+")
 	netperfOutputRegexp = regexp.MustCompile("\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\S+\\s+(\\S+)\\s+")
 	iperfCPUOutputRegexp = regexp.MustCompile(`local/sender\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\),\sremote/receiver\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\)`)
+	fortioOutputRegexp   = regexp.MustCompile(".*\\s(\\S+)\\sqps")
 
 	dataPoints = make(map[string][]point)
 }
@@ -339,6 +345,10 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 		case v.Type == netperfTest:
 			reply.ClientItem.Port = "12865"
 			return
+
+		case v.Type == fortioTest:
+			reply.ClientItem.Port = "8080"
+			return
 		}
 	}
 
@@ -475,6 +485,15 @@ func parseNetperfBandwidth(output string) string {
 	return "0"
 }
 
+
+func parseFortioQuestionPerSec(output string) string {
+	match := fortioOutputRegexp.FindStringSubmatch(output)
+	if match != nil  && len(match) > 1 {
+			return match[1]
+	}
+	return "0"
+}
+
 // ReceiveOutput processes a data received from a single client
 func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 	globalLock.Lock()
@@ -486,6 +505,8 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 	var bw string
 	var cpuSender string
 	var cpuReceiver string
+	var qps string
+
 
 	switch data.Type {
 	case iperfTcpTest:
@@ -512,12 +533,20 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		bw = parseNetperfBandwidth(data.Output)
 		registerDataPoint(testcase.Label, 0, bw, currentJobIndex)
 		testcases[currentJobIndex].Finished = true
-
+		
+	case fortioTest:
+		outputLog = outputLog + fmt.Sprintln("Received fortio output from worker", data.Worker, "for test", $
+				"from", testcase.SourceNode, "to", testcase.DestinationNode) + data.Output
+		writeOutputFile(outputCaptureFile, outputLog)
+		qps = parseFortioQuestionPerSec(data.Output)
+		registerDataPoint(testcase.Label, 0, qps, currentJobIndex)
 	}
 
 	switch data.Type {
 	case iperfTcpTest:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec. CPU usage sender was", cpuSender, "%. CPU usage receiver was", cpuReceiver, "%.")
+	case fortioTest:
+		fmt.Println("Jobdone from worker", data.Worker, "Question Per Second was", qps , "qps")
 	default:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec")
 	}
@@ -576,6 +605,10 @@ func handleClientWorkItem(client *rpc.Client, workItem *WorkItem) {
 		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
 	case workItem.ClientItem.Type == netperfTest:
 		outputString := netperfClient(workItem.ClientItem.Host, workItem.ClientItem.Port, workItem.ClientItem.Type)
+		var reply int
+		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
+	case workItem.ClientItem.Type == fortioTest:
+		outputString := fortioClient(workItem.ClientItem.Host, workItem.ClientItem.Port, workItem.ClientItem.Type)
 		var reply int
 		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
 	}
@@ -671,6 +704,22 @@ func netperfClient(serverHost, serverPort string, workItemType int) (rv string) 
 		rv = output
 	} else {
 		fmt.Println("Error running netperf client", output)
+	}
+
+	return
+}
+
+
+// Invoke and run a fortio client and return the output if successful.
+func fortioClient(serverHost string, serverPort string, workItemType int) (rv string) {
+	server := fmt.Sprintf("%s:8080", serverHost)
+	fmt.Println(server)
+	output, success := cmdExec(fortioPath, []string{fortioPath, "load", server}, 15)
+	if success {
+			fmt.Println(output)
+			rv = output
+	} else {
+			fmt.Println("Error running fortio client", output)
 	}
 
 	return
