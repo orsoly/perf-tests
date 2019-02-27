@@ -749,6 +749,9 @@ func cmdExec(command string, args []string, timeout int32) (rv string, rc bool) 
 	}
 
 	rv = stdoutput.String()
+	if command == fortioPath {
+		rv = stderror.String()
+	}
 	rc = true
 	return
 }
