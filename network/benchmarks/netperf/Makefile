@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-all: docker nptests push launch runtests
+all: docker nptests runtests
 
-DOCKERREPO       := girishkalele/netperf-latest
+DOCKERREPO       := rychne/perftest
 
 docker: nptests launch
 	mkdir -p Dockerbuild && \
 	cp -f Dockerfile Dockerbuild/ && \
 	cp -f nptest/nptests Dockerbuild/ &&\
 	docker build -t $(DOCKERREPO) Dockerbuild/ 
-
-push: docker
-	gcloud docker push $(DOCKERREPO)
+	docker push $(DOCKERREPO)
 
 nptests: nptest/nptest.go
 	cd nptest; GOOS=linux GOARCH=amd64 make nptests
@@ -34,13 +32,11 @@ clean:
 	@go clean
 	cd nptest; make clean
 
-launch: launch.go
-	go build -o launch launch.go
 
 # 'runtests' is the test runner target
 runtests: launch
 	@echo Launching network performance tests
-	./launch
+	go run launch.go -kubeConfig /etc/kubernetes/admin.conf -image rychne/perftest -mssStepSize 0
 	@echo Network performance tests complete - running matplotlib to generate graphs and copy them back
 	cp netperf-latest.csv plotperf && cd plotperf; make plot && mv *png .. && mv *svg ..
 	@echo Results file netperf-latest.csv and SVG/PNG graphs generated successfully
