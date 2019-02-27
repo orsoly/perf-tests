@@ -535,7 +535,7 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		testcases[currentJobIndex].Finished = true
 		
 	case fortioTest:
-		outputLog = outputLog + fmt.Sprintln("Received fortio output from worker", data.Worker, "for test", $
+		outputLog = outputLog + fmt.Sprintln("Received fortio output from worker", data.Worker, "for test", testcase.Label,
 				"from", testcase.SourceNode, "to", testcase.DestinationNode) + data.Output
 		writeOutputFile(outputCaptureFile, outputLog)
 		qps = parseFortioQuestionPerSec(data.Output)
