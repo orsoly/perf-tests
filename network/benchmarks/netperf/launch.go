@@ -51,6 +51,7 @@ const (
 	iperf3Port       = 5201
 	netperfPort      = 12865
 	nodePort         = 30000
+	fortioPort       = 8080
 )
 
 var (
@@ -254,6 +255,12 @@ func createServices(c *kubernetes.Clientset) bool {
 						Port:       netperfPort,
 						TargetPort: intstr.FromInt(netperfPort),
 					},
+					{
+						Name:       "netperf-w2-fortio",
+						Protocol:   api.ProtocolTCP,
+						Port:       fortioPort,
+						TargetPort: intstr.FromInt(fortioPort),
+					},
 				},
 				Type: api.ServiceTypeClusterIP,
 			},
@@ -293,6 +300,12 @@ func createServices(c *kubernetes.Clientset) bool {
 					Protocol:   api.ProtocolTCP,
 					Port:       netperfPort,
 					TargetPort: intstr.FromInt(netperfPort),
+				},
+				{
+					Name:       "netperf-w4-fortio",
+					Protocol:   api.ProtocolTCP,
+					Port:       fortioPort,
+					TargetPort: intstr.FromInt(fortioPort),
 				},
 			},
 			Type: api.ServiceTypeNodePort,
@@ -454,6 +467,9 @@ func createPods(c *kubernetes.Clientset) bool {
 
 	kubeNode = primaryNode.GetName()
 	portSpec = append(portSpec, api.ContainerPort{ContainerPort: iperf3Port, Protocol: api.ProtocolTCP})
+	portSpec = append(portSpec, api.ContainerPort{ContainerPort: iperf3Port, Protocol: api.ProtocolUDP})
+	portSpec = append(portSpec, api.ContainerPort{ContainerPort: netperfPort, Protocol: api.ProtocolTCP})
+	portSpec = append(portSpec, api.ContainerPort{ContainerPort: fortioPort, Protocol: api.ProtocolTCP})
 	for i := 1; i <= extraNetperfPods; i++ {
 		name = fmt.Sprintf("netperf-w2-%03d", i)
 		_, err := c.Core().Pods(testNamespace).Create(&api.Pod{
