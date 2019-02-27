@@ -653,6 +653,7 @@ func startWork() {
 				fmt.Println("Orchestrator requests worker run iperf and netperf servers")
 				go iperfServer()
 				go netperfServer()
+				go fortioServer()
 				time.Sleep(1 * time.Second)
 
 			case workItem.IsClientItem == true:
@@ -675,6 +676,14 @@ func netperfServer() {
 	output, success := cmdExec(netperfServerPath, []string{netperfServerPath, "-D"}, 15)
 	if success {
 		fmt.Println(output)
+	}
+}
+
+// Invoke and indefinitely run fortio server
+func fortioServer() {
+	output, success := cmdExec(fortioPath, []string{fortioPath, "server"}, 15)
+	if success {
+			fmt.Println(output)
 	}
 }
 
