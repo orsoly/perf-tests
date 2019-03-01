@@ -41,9 +41,10 @@ import (
 )
 
 type point struct {
-	mss       int
-	bandwidth string
-	index     int
+	_type  	   int
+	key        string
+	value	   string
+	index      int
 }
 
 var mode string
@@ -177,27 +178,27 @@ func init() {
 
 	workerStateMap = make(map[string]*workerState)
 	testcases = []*testcase{
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "0 fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "0 fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "1 iperf TCP. Same VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "2 iperf TCP. Same VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "3 iperf TCP. Remote VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
-		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "4 iperf TCP. Remote VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
-		{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Label: "5 iperf TCP. Hairpin Pod to own Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
+		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "3 iperf TCP. Remote VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
+		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "4 iperf TCP. Remote VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
+		//{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Label: "5 iperf TCP. Hairpin Pod to own Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "6 iperf UDP. Same VM using Pod IP", Type: iperfUdpTest, ClusterIP: false, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "7 iperf UDP. Same VM using Virtual IP", Type: iperfUdpTest, ClusterIP: true, MSS: mssMax},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "8 iperf UDP. Remote VM using Pod IP", Type: iperfUdpTest, ClusterIP: false, MSS: mssMax},
-		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "9 iperf UDP. Remote VM using Virtual IP", Type: iperfUdpTest, ClusterIP: true, MSS: mssMax},
+		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "8 iperf UDP. Remote VM using Pod IP", Type: iperfUdpTest, ClusterIP: false, MSS: mssMax},
+		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "9 iperf UDP. Remote VM using Virtual IP", Type: iperfUdpTest, ClusterIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "10 netperf. Same VM using Pod IP", Type: netperfTest, ClusterIP: false},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "11 netperf. Same VM using Virtual IP", Type: netperfTest, ClusterIP: true},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "12 netperf. Remote VM using Pod IP", Type: netperfTest, ClusterIP: false},
-		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "13 netperf. Remote VM using Virtual IP", Type: netperfTest, ClusterIP: true},
+		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "12 netperf. Remote VM using Pod IP", Type: netperfTest, ClusterIP: false},
+		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "13 netperf. Remote VM using Virtual IP", Type: netperfTest, ClusterIP: true},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "14 iperf TCP. Same VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "15 iperf TCP. Same VM, secondary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
-		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "16 iperf TCP. Remote VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
+		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "16 iperf TCP. Remote VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "17 iperf UDP. Same VM, primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "18 iperf UDP. Same VM, primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMax},
-		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "19 iperf UDP. Remote VM,  primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
+		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "19 iperf UDP. Remote VM,  primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "0 fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "0 fortio HTTP. Same VM using Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
 	}
 
 	currentJobIndex = 0
@@ -207,7 +208,7 @@ func init() {
 	iperfUDPOutputRegexp = regexp.MustCompile("\\s+(\\S+)\\sMbits/sec\\s+\\S+\\s+ms\\s+")
 	netperfOutputRegexp = regexp.MustCompile("\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\S+\\s+(\\S+)\\s+")
 	iperfCPUOutputRegexp = regexp.MustCompile(`local/sender\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\),\sremote/receiver\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\)`)
-	fortioOutputRegexp   = regexp.MustCompile(".*\\s(\\S+)\\sqps")
+	fortioOutputRegexp   = regexp.MustCompile("(?s)Aggregated.*avg\\s(\\S+)\\s\\S+\\s(\\S+).*50%\\s(\\S+).*75%\\s(\\S+).*99%\\s(\\S+).*99.9%\\s(\\S+)")
 
 	dataPoints = make(map[string][]point)
 }
@@ -405,46 +406,68 @@ func writeOutputFile(filename, data string) {
 	}
 }
 
-func registerDataPoint(label string, mss int, value string, index int) {
-	if sl, ok := dataPoints[label]; !ok {
-		dataPoints[label] = []point{{mss: mss, bandwidth: value, index: index}}
-		dataPointKeys = append(dataPointKeys, label)
-	} else {
-		dataPoints[label] = append(sl, point{mss: mss, bandwidth: value, index: index})
-	}
+func registerDataPoint(_type int, label string, key string, value string, index int) {
+		if sl, ok := dataPoints[label]; !ok {
+			dataPoints[label] = []point{{_type: _type, key: key, value: value, index: index}}
+			dataPointKeys = append(dataPointKeys, label)
+		} else {
+			dataPoints[label] = append(sl, point{_type: _type,key: key, value: value, index: index})
+		}
 }
 
 func flushDataPointsToCsv() {
 	var buffer string
-
-	// Write the MSS points for the X-axis before dumping all the testcase datapoints
-	for _, points := range dataPoints {
-		if len(points) == 1 {
-			continue
-		}
-		buffer = fmt.Sprintf("%-45s, Maximum,", "MSS")
-		for _, p := range points {
-			buffer = buffer + fmt.Sprintf(" %d,", p.mss)
-		}
-		break
-	}
-	fmt.Println(buffer)
+	var iperfTcpHeader, netperfHeader, fortioHeader bool = false, false, false
 
 	for _, label := range dataPointKeys {
-		buffer = fmt.Sprintf("%-45s,", label)
-		points := dataPoints[label]
-		var max float64
-		for _, p := range points {
-			fv, _ := strconv.ParseFloat(p.bandwidth, 64)
-			if fv > max {
-				max = fv
+		for _, dp := range dataPoints[label] {
+			switch dp._type{
+				case iperfTcpTest:
+					if !iperfTcpHeader {
+						//Header for iperf tcp test cases
+						buffer = fmt.Sprintf("%-60s,", "MSS")
+						for _, p := range dataPoints[label] {
+							buffer = buffer + fmt.Sprintf("%-15s,", p.key)
+						}
+						fmt.Println(buffer)
+						buffer = ""
+						iperfTcpHeader = true
+					}
+
+					// Data
+					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+
+				case iperfUdpTest, netperfTest:
+					if !netperfHeader {
+						//Header for iperf udp and netperf test cases
+						buffer = fmt.Sprintf("%-60s, Bandwidth", " ")
+						fmt.Println(buffer)
+						buffer = ""
+						netperfHeader = true
+					}
+					
+					// Data
+					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+
+				case fortioTest:
+					if !fortioHeader {
+						//Header for fortio test cases
+						buffer = fmt.Sprintf("%-60s,", " ")
+						for _, p := range dataPoints[label] {
+							buffer = buffer + fmt.Sprintf("%-15s,", p.key)
+						}
+						fmt.Println(buffer)
+						buffer = ""
+						fortioHeader = true
+					}
+
+					// Data
+					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
 			}
 		}
-		buffer = buffer + fmt.Sprintf("%f,", max)
-		for _, p := range points {
-			buffer = buffer + fmt.Sprintf("%s,", p.bandwidth)
-		}
+		fmt.Printf("%-60s,", label)
 		fmt.Println(buffer)
+		buffer = ""	
 	}
 	fmt.Println("END CSV DATA")
 }
@@ -486,12 +509,12 @@ func parseNetperfBandwidth(output string) string {
 }
 
 
-func parseFortioQuestionPerSec(output string) string {
+func parseFortioResult(output string) []string {
 	match := fortioOutputRegexp.FindStringSubmatch(output)
-	if match != nil  && len(match) > 1 {
-			return match[1]
+	if match != nil  && len(match) > 6 {
+			return match
 	}
-	return "0"
+	return make([]string, 7)
 }
 
 // ReceiveOutput processes a data received from a single client
@@ -505,8 +528,7 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 	var bw string
 	var cpuSender string
 	var cpuReceiver string
-	var qps string
-
+	var res []string
 
 	switch data.Type {
 	case iperfTcpTest:
@@ -516,7 +538,7 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		writeOutputFile(outputCaptureFile, outputLog)
 		bw = parseIperfTcpBandwidth(data.Output)
 		cpuSender, cpuReceiver = parseIperfCpuUsage(data.Output)
-		registerDataPoint(testcase.Label, mss, bw, currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, fmt.Sprintf("%d",mss), bw, currentJobIndex)
 
 	case iperfUdpTest:
 		mss := testcases[currentJobIndex].MSS - mssStepSize
@@ -524,29 +546,35 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 			"from", testcase.SourceNode, "to", testcase.DestinationNode, "MSS:", mss) + data.Output
 		writeOutputFile(outputCaptureFile, outputLog)
 		bw = parseIperfUdpBandwidth(data.Output)
-		registerDataPoint(testcase.Label, mss, bw, currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, fmt.Sprintf("%d",mss), bw, currentJobIndex)
 
 	case netperfTest:
 		outputLog = outputLog + fmt.Sprintln("Received netperf output from worker", data.Worker, "for test", testcase.Label,
 			"from", testcase.SourceNode, "to", testcase.DestinationNode) + data.Output
 		writeOutputFile(outputCaptureFile, outputLog)
 		bw = parseNetperfBandwidth(data.Output)
-		registerDataPoint(testcase.Label, 0, bw, currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "0", bw, currentJobIndex)
 		testcases[currentJobIndex].Finished = true
 		
 	case fortioTest:
 		outputLog = outputLog + fmt.Sprintln("Received fortio output from worker", data.Worker, "for test", testcase.Label,
 				"from", testcase.SourceNode, "to", testcase.DestinationNode) + data.Output
 		writeOutputFile(outputCaptureFile, outputLog)
-		qps = parseFortioQuestionPerSec(data.Output)
-		registerDataPoint(testcase.Label, 0, qps, currentJobIndex)
+		res = parseFortioResult(data.Output)
+		registerDataPoint(data.Type, testcase.Label, "avg", res[1], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "dev", res[2], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "50%", res[3], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "75%", res[4], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "99%", res[5], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "99,9%", res[6], currentJobIndex)
+		testcases[currentJobIndex].Finished = true
 	}
 
 	switch data.Type {
 	case iperfTcpTest:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec. CPU usage sender was", cpuSender, "%. CPU usage receiver was", cpuReceiver, "%.")
 	case fortioTest:
-		fmt.Println("Jobdone from worker", data.Worker, "Question Per Second was", qps , "qps")
+		fmt.Println("Jobdone from worker", data.Worker, "avg", res[1] , "dev", res[2], "50%", res[3], "75%", res[4], "99%", res[5], "99,9%", res[6])
 	default:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec")
 	}
