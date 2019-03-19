@@ -581,20 +581,20 @@ func getOrchestratorPodName(pods *api.PodList) string {
 }
 
 // Retrieve the logs for the pod/container and check if csv data has been generated
-func getCsvResultsFromPod(c *kubernetes.Clientset, podName string) *string {
+func getCsvResultsFromPod(c *kubernetes.Clientset, podName string) (*string, error) {
 	body, err := c.Core().Pods(testNamespace).GetLogs(podName, &api.PodLogOptions{Timestamps: false}).DoRaw()
 	if err != nil {
 		fmt.Printf("Error (%s) reading logs from pod %s", err, podName)
-		return nil
+		return nil, err
 	}
 	logData := string(body)
 	index := strings.Index(logData, csvDataMarker)
 	endIndex := strings.Index(logData, csvEndDataMarker)
 	if index == -1 || endIndex == -1 {
-		return nil
+		return nil, nil
 	}
 	csvData := string(body[index+len(csvDataMarker)+1 : endIndex])
-	return &csvData
+	return &csvData, nil
 }
 
 // processCsvData : Process the CSV datafile and generate line and bar graphs
@@ -655,9 +655,19 @@ func executeTests(c *kubernetes.Clientset) bool {
 		fmt.Println("Orchestrator Pod is", orchestratorPodName)
 
 		// The pods orchestrate themselves, we just wait for the results file to show up in the orchestrator container
+		var errorCount int = 0
 		for true {
 			// Monitor the orchestrator pod for the CSV results file
-			csvdata := getCsvResultsFromPod(c, orchestratorPodName)
+			csvdata, err := getCsvResultsFromPod(c, orchestratorPodName)
+			if err != nil {
+				errorCount++
+				time.Sleep(60 * time.Second)
+				if errorCount == 5 {
+					fmt.Println("TEST RUN exit because orchestrator pod seems unreachable")
+					return false
+				}
+				continue
+			}
 			if csvdata == nil {
 				fmt.Println("Scanned orchestrator pod filesystem - no results file found yet...waiting for orchestrator to write CSV file...")
 				time.Sleep(60 * time.Second)
