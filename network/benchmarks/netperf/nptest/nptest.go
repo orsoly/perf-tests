@@ -65,6 +65,7 @@ var iperfUDPOutputRegexp *regexp.Regexp
 var netperfOutputRegexp *regexp.Regexp
 var iperfCPUOutputRegexp *regexp.Regexp
 var fortioOutputRegexp *regexp.Regexp
+var pingOutputRegexp *regexp.Regexp
 
 var dataPoints map[string][]point
 var dataPointKeys []string
@@ -92,6 +93,7 @@ const (
 	iperfUdpTest = iota
 	netperfTest  = iota
 	fortioTest   = iota
+	pingTest   = iota
 )
 
 // NetPerfRpc service that exposes RegisterClient and ReceiveOutput for clients
@@ -173,7 +175,7 @@ func init() {
         s := os.Getenv("mssStepSize")
         mssStepSize, err = strconv.Atoi(s)
         if err != nil {
-                fmt.Println(err)
+				fmt.Println(err)
         }
 
 	workerStateMap = make(map[string]*workerState)
@@ -201,10 +203,15 @@ func init() {
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "21 fortio HTTP. Same VM using Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "22 fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
 		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Label: "23 fortio HTTP. Same VM using Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
-		{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Label: "24 fortio HTTP. Hairpin Pod to own Virtual IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Label: "24 fortio HTTP. Hairpin Pod to own Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "25 fortio HTTP. Same VM, primary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "26 fortio HTTP. Same VM, secondary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
 		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "27 fortio HTTP. Remote VM, primary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Label: "28 ping. Same VM using Pod IP", Type: pingTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Label: "29 ping. Remote VM using Pod IP", Type: pingTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "31 ping. Same VM, primary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Label: "32 ping. Same VM, secondary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Label: "33 ping. Remote VM, primary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
 	}
 
 	currentJobIndex = 0
@@ -215,6 +222,7 @@ func init() {
 	netperfOutputRegexp = regexp.MustCompile("\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\S+\\s+(\\S+)\\s+")
 	iperfCPUOutputRegexp = regexp.MustCompile(`local/sender\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\),\sremote/receiver\s(\d+\.\d+)%\s\((\d+\.\d+)%\w/(\d+\.\d+)%\w\)`)
 	fortioOutputRegexp   = regexp.MustCompile("(?s)Aggregated.*avg\\s(\\S+)\\s\\S+\\s(\\S+).*50%\\s(\\S+).*75%\\s(\\S+).*99%\\s(\\S+).*99.9%\\s(\\S+)")
+	pingOutputRegexp = regexp.MustCompile("(?s)(\\S+)%.*= (\\S+)\\/(\\S+)\\/(\\S+)\\/(\\S+)")
 
 	dataPoints = make(map[string][]point)
 }
@@ -356,6 +364,8 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 		case v.Type == fortioTest:
 			reply.ClientItem.Port = "8080"
 			return
+		case v.Type == pingTest:
+			return
 		}
 	}
 
@@ -423,7 +433,7 @@ func registerDataPoint(_type int, label string, key string, value string, index 
 
 func flushDataPointsToCsv() {
 	var buffer string
-	var iperfTcpHeader, netperfHeader, fortioHeader bool = false, false, false
+	var iperfTcpHeader, netperfHeader, fortioHeader, pingHeader bool = false, false, false, false
 
 	for _, label := range dataPointKeys {
 		for _, dp := range dataPoints[label] {
@@ -465,6 +475,21 @@ func flushDataPointsToCsv() {
 						fmt.Println(buffer)
 						buffer = ""
 						fortioHeader = true
+					}
+
+					// Data
+					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+
+				case pingTest:
+					if !pingHeader {
+						//Header for ping test cases
+						buffer = fmt.Sprintf("%-60s,", " ")
+						for _, p := range dataPoints[label] {
+							buffer = buffer + fmt.Sprintf("%-15s,", p.key)
+						}
+						fmt.Println(buffer)
+						buffer = ""
+						pingHeader = true
 					}
 
 					// Data
@@ -520,7 +545,15 @@ func parseFortioResult(output string) []string {
 	if match != nil  && len(match) > 6 {
 			return match
 	}
-	return make([]string, 7)
+	return []string{"0","0","0","0","0","0","0"}
+}
+
+func parsePingResult(output string) []string {
+	match := pingOutputRegexp.FindStringSubmatch(output)
+	if match != nil  && len(match) > 5 {
+			return match
+	}
+	return []string{"0","0","0","0","0","0"}
 }
 
 // ReceiveOutput processes a data received from a single client
@@ -574,6 +607,17 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		registerDataPoint(data.Type, testcase.Label, "99%", res[5], currentJobIndex)
 		registerDataPoint(data.Type, testcase.Label, "99,9%", res[6], currentJobIndex)
 		testcases[currentJobIndex].Finished = true
+	case pingTest:
+		outputLog = outputLog + fmt.Sprintln("Received ping output from worker", data.Worker, "for test", testcase.Label,
+				"from", testcase.SourceNode, "to", testcase.DestinationNode) + data.Output
+		writeOutputFile(outputCaptureFile, outputLog)
+		res = parsePingResult(data.Output)
+		registerDataPoint(data.Type, testcase.Label, "loss", res[1], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "min", res[2], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "avg", res[3], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "max", res[4], currentJobIndex)
+		registerDataPoint(data.Type, testcase.Label, "mdev", res[5], currentJobIndex)
+		testcases[currentJobIndex].Finished = true		
 	}
 
 	switch data.Type {
@@ -581,6 +625,8 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec. CPU usage sender was", cpuSender, "%. CPU usage receiver was", cpuReceiver, "%.")
 	case fortioTest:
 		fmt.Println("Jobdone from worker", data.Worker, "avg", res[1] , "dev", res[2], "50%", res[3], "75%", res[4], "99%", res[5], "99,9%", res[6])
+	case pingTest:
+		fmt.Println("Jobdone from worker", data.Worker, "loss", res[1] , "ms min", res[2], "ms avg", res[3], "ms max", res[4], "ms mdev", res[5], "ms")
 	default:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec")
 	}
@@ -645,6 +691,10 @@ func handleClientWorkItem(client *rpc.Client, workItem *WorkItem) {
 		outputString := fortioClient(workItem.ClientItem.Host, workItem.ClientItem.Port, workItem.ClientItem.Type)
 		var reply int
 		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
+	case workItem.ClientItem.Type == pingTest:
+		outputString := pingClient(workItem.ClientItem.Host, workItem.ClientItem.Port, workItem.ClientItem.Type)
+		var reply int
+		client.Call("NetPerfRpc.ReceiveOutput", WorkerOutput{Output: outputString, Worker: worker, Type: workItem.ClientItem.Type}, &reply)
 	}
 	// Client COOLDOWN period before asking for next work item to replenish burst allowance policers etc
 	time.Sleep(10 * time.Second)
@@ -671,7 +721,6 @@ func startWork() {
 		for true {
 			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP(), PrimaryNodeIP: primaryNodeIP, SecondaryNodeIP: secondaryNodeIP, NodePort: nodePort}
 			var workItem WorkItem
-
 			if err := client.Call("NetPerfRpc.RegisterClient", clientData, &workItem); err != nil {
 				// RPC server has probably gone away - attempt to reconnect
 				fmt.Println("Error attempting RPC call", err)
@@ -768,6 +817,19 @@ func fortioClient(serverHost string, serverPort string, workItemType int) (rv st
 	return
 }
 
+// Invoke and run a ping client and return the output if successful.
+func pingClient(serverHost string, serverPort string, workItemType int) (rv string) {
+	output, success := cmdExec("/bin/ping", []string{"/bin/ping", "-c 10 -q", serverHost}, 15)
+	if success {
+			fmt.Println(output)
+			rv = output
+	} else {
+			fmt.Println("Error running ping client", output)
+	}
+
+	return
+}
+
 func cmdExec(command string, args []string, timeout int32) (rv string, rc bool) {
 	cmd := exec.Cmd{Path: command, Args: args}
 
@@ -786,6 +848,7 @@ func cmdExec(command string, args []string, timeout int32) (rv string, rc bool) 
 	if command == fortioPath {
 		rv = stderror.String()
 	}
+	fmt.Println(rv)
 	rc = true
 	return
 }
