@@ -444,9 +444,9 @@ func flushDataPointsToCsv() {
 				case iperfTcpTest:
 					if !iperfTcpHeader {
 						//Header for iperf tcp test cases
-						buffer = fmt.Sprintf("%-60s,", "0")
+						buffer = fmt.Sprintf("%s,,", "0")
 						for _, p := range dataPoints[index] {
-							buffer = buffer + fmt.Sprintf("%-15s,", p.key)
+							buffer = buffer + fmt.Sprintf("%s,", p.key)
 						}
 						fmt.Println(buffer)
 						buffer = ""
@@ -454,26 +454,26 @@ func flushDataPointsToCsv() {
 					}
 
 					// Data
-					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+					buffer = buffer + fmt.Sprintf("%s,", dp.value)
 
 				case iperfUdpTest, netperfTest:
 					if !netperfHeader {
 						//Header for iperf udp and netperf test cases
-						buffer = fmt.Sprintf("%-60s, Bandwidth", "0")
+						buffer = fmt.Sprintf("%s,,Bandwidth", "0")
 						fmt.Println(buffer)
 						buffer = ""
 						netperfHeader = true
 					}
 					
 					// Data
-					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+					buffer = buffer + fmt.Sprintf("%s,", dp.value)
 
 				case fortioTest:
 					if !fortioHeader {
 						//Header for fortio test cases
-						buffer = fmt.Sprintf("%-60s,", "0")
+						buffer = fmt.Sprintf("0,,")
 						for _, p := range dataPoints[index] {
-							buffer = buffer + fmt.Sprintf("%-15s,", p.key)
+							buffer = buffer + fmt.Sprintf("%s,", p.key)
 						}
 						fmt.Println(buffer)
 						buffer = ""
@@ -481,14 +481,14 @@ func flushDataPointsToCsv() {
 					}
 
 					// Data
-					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+					buffer = buffer + fmt.Sprintf("%s,", dp.value)
 
 				case pingTest:
 					if !pingHeader {
 						//Header for ping test cases
-						buffer = fmt.Sprintf("%-60s,", "0")
+						buffer = fmt.Sprintf("%s,,", "0")
 						for _, p := range dataPoints[index] {
-							buffer = buffer + fmt.Sprintf("%-15s,", p.key)
+							buffer = buffer + fmt.Sprintf("%s,", p.key)
 						}
 						fmt.Println(buffer)
 						buffer = ""
@@ -496,10 +496,10 @@ func flushDataPointsToCsv() {
 					}
 
 					// Data
-					buffer = buffer + fmt.Sprintf("%-15s,", dp.value)
+					buffer = buffer + fmt.Sprintf("%s,", dp.value)
 			}
 		}
-		fmt.Printf("%s,%-60s,", index, dataPointLabels[index])
+		fmt.Printf("%s,%s,", index, dataPointLabels[index])
 		fmt.Println(buffer)
 		buffer = ""	
 	}
