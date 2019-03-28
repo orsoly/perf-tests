@@ -50,7 +50,8 @@ const (
 	orchestratorPort = 5202
 	iperf3Port       = 5201
 	netperfPort      = 12865
-	nodePort         = 30000
+	iperf3NodePort   = 30000
+	fortioNodePort   = 30001
 	fortioPort       = 8080
 )
 
@@ -286,14 +287,14 @@ func createServices(c *kubernetes.Clientset) bool {
 					Protocol:   api.ProtocolTCP,
 					Port:       iperf3Port,
 					TargetPort: intstr.FromInt(iperf3Port),
-					NodePort:   nodePort,
+					NodePort:   iperf3NodePort,
 				},
 				{
 					Name:       "netperf-w4-udp",
 					Protocol:   api.ProtocolUDP,
 					Port:       iperf3Port,
 					TargetPort: intstr.FromInt(iperf3Port),
-					NodePort:    nodePort,
+					NodePort:    iperf3NodePort,
 				},
 				{
 					Name:       "netperf-w4-netperf",
@@ -306,6 +307,7 @@ func createServices(c *kubernetes.Clientset) bool {
 					Protocol:   api.ProtocolTCP,
 					Port:       fortioPort,
 					TargetPort: intstr.FromInt(fortioPort),
+					NodePort:   fortioNodePort,
 				},
 			},
 			Type: api.ServiceTypeNodePort,
@@ -344,6 +346,8 @@ func createRCs(c *kubernetes.Clientset) bool {
 							Args:            []string{"--mode=orchestrator"},
 							Env:			 []api.EnvVar{
 											     {Name: "mssStepSize", Value: fmt.Sprintf("%d", mssStepSize)},
+												 {Name: "iperf3NodePort", Value: fmt.Sprintf("%d", iperf3NodePort)},
+												 {Name: "fortioNodePort", Value: fmt.Sprintf("%d", fortioNodePort)},
 											 },
 							ImagePullPolicy: "Always",
 						},
@@ -380,7 +384,8 @@ func createRCs(c *kubernetes.Clientset) bool {
 			{Name: "podname", Value: name},
 			{Name: "primaryNodeIP", Value: primaryNodeIP},
 			{Name: "secondaryNodeIP", Value: secondaryNodeIP},
-			{Name: "nodePort", Value: fmt.Sprintf("%d", nodePort)},
+			{Name: "iperf3NodePort", Value: fmt.Sprintf("%d", iperf3NodePort)},
+			{Name: "fortioNodePort", Value: fmt.Sprintf("%d", fortioNodePort)},
 		}
 
 		replicas := int32(1)

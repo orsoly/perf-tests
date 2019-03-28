@@ -54,7 +54,8 @@ var kubenode string
 var podname string
 var primaryNodeIP string
 var secondaryNodeIP string
-var nodePort string
+var iperf3NodePort string
+var fortioNodePort string
 var mssStepSize int
 
 var workerStateMap map[string]*workerState
@@ -107,7 +108,6 @@ type ClientRegistrationData struct {
 	IP              string
 	PrimaryNodeIP   string
 	SecondaryNodeIP string
-	NodePort        string
 }
 
 // IperfClientWorkItem represents a single task for an Iperf client
@@ -140,7 +140,6 @@ type workerState struct {
 	worker          string
 	primaryNodeIP   string
 	secondaryNodeIP string
-	nodePort        string
 }
 
 // WorkerOutput stores the results from a single worker
@@ -183,36 +182,36 @@ func init() {
 	testcases = []*testcase{
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "1", Label:"iperf TCP. Same VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "2", Label:"iperf TCP. Same VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
-		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "3", Label:"iperf TCP. Remote VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "4", Label:"iperf TCP. Remote VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "3", Label:"iperf TCP. Remote VM using Pod IP", Type: iperfTcpTest, ClusterIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "4", Label:"iperf TCP. Remote VM using Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
 		{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Index: "5", Label:"iperf TCP. Hairpin Pod to own Virtual IP", Type: iperfTcpTest, ClusterIP: true, MSS: mssMin},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "6", Label:"iperf TCP. Same VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "7", Label:"iperf TCP. Same VM, secondary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "8", Label:"iperf TCP. Remote VM, primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "6", Label:"iperf TCP. Same VM primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "7", Label:"iperf TCP. Same VM secondary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "8", Label:"iperf TCP. Remote VM primary node IP using NodePort", Type: iperfTcpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "9", Label:"iperf UDP. Same VM using Pod IP", Type: iperfUdpTest, ClusterIP: false, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "10", Label:"iperf UDP. Same VM using Virtual IP", Type: iperfUdpTest, ClusterIP: true, MSS: mssMax},
-		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "11", Label:"iperf UDP. Remote VM using Pod IP", Type: iperfUdpTest, ClusterIP: false, MSS: mssMax},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "12", Label:"iperf UDP. Remote VM using Virtual IP", Type: iperfUdpTest, ClusterIP: true, MSS: mssMax},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "13", Label:"iperf UDP. Same VM, primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "14", Label:"iperf UDP. Same VM, secondary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMax},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "15", Label:"iperf UDP. Remote VM,  primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "11", Label:"iperf UDP. Remote VM using Pod IP", Type: iperfUdpTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "12", Label:"iperf UDP. Remote VM using Virtual IP", Type: iperfUdpTest, ClusterIP: true, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "13", Label:"iperf UDP. Same VM primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "14", Label:"iperf UDP. Same VM secondary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "15", Label:"iperf UDP. Remote VM  primary node IP using NodePort", Type: iperfUdpTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "16", Label:"netperf. Same VM using Pod IP", Type: netperfTest, ClusterIP: false},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "17", Label:"netperf. Same VM using Virtual IP", Type: netperfTest, ClusterIP: true},
-		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "18", Label:"netperf. Remote VM using Pod IP", Type: netperfTest, ClusterIP: false},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "19", Label:"netperf. Remote VM using Virtual IP", Type: netperfTest, ClusterIP: true},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "18", Label:"netperf. Remote VM using Pod IP", Type: netperfTest, ClusterIP: false},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "19", Label:"netperf. Remote VM using Virtual IP", Type: netperfTest, ClusterIP: true},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "20", Label:"fortio HTTP. Same VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "21", Label:"fortio HTTP. Same VM using Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
-		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "22", Label:"fortio HTTP. Remote VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "23", Label:"fortio HTTP. Remote VM using Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "22", Label:"fortio HTTP. Remote VM using Pod IP", Type: fortioTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w2", Index: "23", Label:"fortio HTTP. Remote VM using Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
 		{SourceNode: "netperf-w2", DestinationNode: "netperf-w2", Index: "24", Label:"fortio HTTP. Hairpin Pod to own Virtual IP", Type: fortioTest, ClusterIP: true, MSS: mssMax},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "25", Label:"fortio HTTP. Same VM, primary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "26", Label:"fortio HTTP. Same VM, secondary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "27", Label:"fortio HTTP. Remote VM, primary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "25", Label:"fortio HTTP. Same VM primary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "26", Label:"fortio HTTP. Same VM secondary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "27", Label:"fortio HTTP. Remote VM primary node IP using NodePort", Type: fortioTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
 		{SourceNode: "netperf-w1", DestinationNode: "netperf-w2", Index: "28", Label:"ping. Same VM using Pod IP", Type: pingTest, ClusterIP: false, MSS: mssMax},
-		//{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "29", Label:"ping. Remote VM using Pod IP", Type: pingTest, ClusterIP: false, MSS: mssMax},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "31", Label:"ping. Same VM, primary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
-		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "32", Label:"ping. Same VM, secondary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
-		//{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "33", Label:"ping. Remote VM, primary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w3", Index: "29", Label:"ping. Remote VM using Pod IP", Type: pingTest, ClusterIP: false, MSS: mssMax},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "31", Label:"ping. Same VM primary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: true,  MSS: mssMin},
+		{SourceNode: "netperf-w1", DestinationNode: "netperf-w4", Index: "32", Label:"ping. Same VM secondary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: false, MSS: mssMin},
+		{SourceNode: "netperf-w3", DestinationNode: "netperf-w4", Index: "33", Label:"ping. RemoteVM primary node IP using NodePort", Type: pingTest, ClusterIP: false, UsePrimaryNodeIP: true, MSS: mssMin},
 	}
 
 	currentJobIndex = 0
@@ -262,7 +261,8 @@ func grabEnv() {
 	podname = os.Getenv("HOSTNAME")
 	primaryNodeIP = os.Getenv("primaryNodeIP")
 	secondaryNodeIP = os.Getenv("secondaryNodeIP")
-	nodePort = os.Getenv("nodePort")
+	iperf3NodePort = os.Getenv("iperf3NodePort")
+	fortioNodePort = os.Getenv("fortioNodePort")
 }
 
 func validateParams() (rv bool) {
@@ -334,11 +334,16 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 		if !v.ClusterIP {
 			//netperf-w4 pod is for NodePort measurements
 			if v.DestinationNode == "netperf-w4" {
-				reply.ClientItem.Port = workerS.nodePort
 				if v.UsePrimaryNodeIP {
 					reply.ClientItem.Host = workerS.primaryNodeIP
 				} else {
 					reply.ClientItem.Host = workerS.secondaryNodeIP
+				}
+				if v.Type == fortioTest {
+					reply.ClientItem.Port = fortioNodePort
+					return
+				} else {
+					reply.ClientItem.Port = iperf3NodePort
 				}
 			} else {
 				reply.ClientItem.Host = getWorkerPodIP(v.DestinationNode)
@@ -395,7 +400,7 @@ func (t *NetPerfRpc) RegisterClient(data *ClientRegistrationData, reply *WorkIte
 
 	if !ok {
 		// For new clients, trigger an iperf server start immediately
-		state = &workerState{sentServerItem: true, idle: true, IP: data.IP, worker: data.Worker, primaryNodeIP: data.PrimaryNodeIP, secondaryNodeIP: data.SecondaryNodeIP, nodePort: data.NodePort}
+		state = &workerState{sentServerItem: true, idle: true, IP: data.IP, worker: data.Worker, primaryNodeIP: data.PrimaryNodeIP, secondaryNodeIP: data.SecondaryNodeIP}
 		workerStateMap[data.Worker] = state
 		reply.IsServerItem = true
 		reply.ServerItem.ListenPort = "5201"
@@ -705,7 +710,7 @@ func handleClientWorkItem(client *rpc.Client, workItem *WorkItem) {
 
 // startWork : Entry point to the worker infinite loop
 func startWork() {
-	for true {
+	for true {	
 		var timeout time.Duration
 		var client *rpc.Client
 		var err error
@@ -722,7 +727,7 @@ func startWork() {
 		}
 
 		for true {
-			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP(), PrimaryNodeIP: primaryNodeIP, SecondaryNodeIP: secondaryNodeIP, NodePort: nodePort}
+			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP(), PrimaryNodeIP: primaryNodeIP, SecondaryNodeIP: secondaryNodeIP}
 			var workItem WorkItem
 			if err := client.Call("NetPerfRpc.RegisterClient", clientData, &workItem); err != nil {
 				// RPC server has probably gone away - attempt to reconnect
@@ -807,7 +812,7 @@ func netperfClient(serverHost, serverPort string, workItemType int) (rv string) 
 
 // Invoke and run a fortio client and return the output if successful.
 func fortioClient(serverHost string, serverPort string, workItemType int) (rv string) {
-	server := fmt.Sprintf("%s:8080", serverHost)
+	server := fmt.Sprintf("%s:%s", serverHost, serverPort)
 	fmt.Println(server)
 	output, success := cmdExec(fortioPath, []string{fortioPath, "load", server}, 15)
 	if success {
@@ -822,7 +827,7 @@ func fortioClient(serverHost string, serverPort string, workItemType int) (rv st
 
 // Invoke and run a ping client and return the output if successful.
 func pingClient(serverHost string, serverPort string, workItemType int) (rv string) {
-	output, success := cmdExec("/bin/ping", []string{"/bin/ping", "-c 10 -q", serverHost}, 15)
+	output, success := cmdExec("/bin/ping", []string{"/bin/ping", "-i", "0", "-c", "1000", "-q", serverHost}, 15)
 	if success {
 			fmt.Println(output)
 			rv = output
