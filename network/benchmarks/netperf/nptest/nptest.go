@@ -756,7 +756,7 @@ func startWork() {
 
 // Invoke and indefinitely run an iperf server
 func iperfServer() {
-	output, success := cmdExec(iperf3Path, []string{iperf3Path, "-s", host, "-J", "-i", "60"}, 15)
+	output, success := cmdExec(iperf3Path, []string{iperf3Path, "-s", host, "-J", "-i", "60"}, 30)
 	if success {
 		fmt.Println(output)
 	}
@@ -764,7 +764,7 @@ func iperfServer() {
 
 // Invoke and indefinitely run netperf server
 func netperfServer() {
-	output, success := cmdExec(netperfServerPath, []string{netperfServerPath, "-D"}, 15)
+	output, success := cmdExec(netperfServerPath, []string{netperfServerPath, "-D"}, 30)
 	if success {
 		fmt.Println(output)
 	}
@@ -772,7 +772,7 @@ func netperfServer() {
 
 // Invoke and indefinitely run fortio server
 func fortioServer() {
-	output, success := cmdExec(fortioPath, []string{fortioPath, "server"}, 15)
+	output, success := cmdExec(fortioPath, []string{fortioPath, "server"}, 30)
 	if success {
 			fmt.Println(output)
 	}
@@ -782,13 +782,13 @@ func fortioServer() {
 func iperfClient(serverHost, serverPort string, mss int, workItemType int) (rv string) {
 	switch {
 	case workItemType == iperfTcpTest:
-		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-p", serverPort, "-V", "-N", "-i", "30", "-t", "10", "-f", "m", "-w", "512M", "-Z", "-P", parallelStreams, "-M", strconv.Itoa(mss)}, 15)
+		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-p", serverPort, "-V", "-N", "-i", "30", "-t", "10", "-f", "m", "-w", "512M", "-Z", "-P", parallelStreams, "-M", strconv.Itoa(mss)}, 30)
 		if success {
 			rv = output
 		}
 
 	case workItemType == iperfUdpTest:
-		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-p", serverPort, "-i", "30", "-t", "10", "-f", "m", "-b", "0", "-u"}, 15)
+		output, success := cmdExec(iperf3Path, []string{iperf3Path, "-c", serverHost, "-p", serverPort, "-i", "30", "-t", "10", "-f", "m", "-b", "0", "-u"}, 30)
 		if success {
 			rv = output
 		}
@@ -798,7 +798,7 @@ func iperfClient(serverHost, serverPort string, mss int, workItemType int) (rv s
 
 // Invoke and run a netperf client and return the output if successful.
 func netperfClient(serverHost, serverPort string, workItemType int) (rv string) {
-	output, success := cmdExec(netperfPath, []string{netperfPath, "-H", serverHost}, 15)
+	output, success := cmdExec(netperfPath, []string{netperfPath, "-H", serverHost}, 30)
 	if success {
 		fmt.Println(output)
 		rv = output
@@ -814,7 +814,7 @@ func netperfClient(serverHost, serverPort string, workItemType int) (rv string) 
 func fortioClient(serverHost string, serverPort string, workItemType int) (rv string) {
 	server := fmt.Sprintf("%s:%s", serverHost, serverPort)
 	fmt.Println(server)
-	output, success := cmdExec(fortioPath, []string{fortioPath, "load", server}, 15)
+	output, success := cmdExec(fortioPath, []string{fortioPath, "load", server}, 30)
 	if success {
 			fmt.Println(output)
 			rv = output
@@ -827,7 +827,7 @@ func fortioClient(serverHost string, serverPort string, workItemType int) (rv st
 
 // Invoke and run a ping client and return the output if successful.
 func pingClient(serverHost string, serverPort string, workItemType int) (rv string) {
-	output, success := cmdExec("/bin/ping", []string{"/bin/ping", "-i", "0", "-c", "1000", "-q", serverHost}, 15)
+	output, success := cmdExec("/bin/ping", []string{"/bin/ping", "-i", "0", "-c", "1000", "-q", serverHost}, 30)
 	if success {
 			fmt.Println(output)
 			rv = output
@@ -838,25 +838,42 @@ func pingClient(serverHost string, serverPort string, workItemType int) (rv stri
 	return
 }
 
-func cmdExec(command string, args []string, timeout int32) (rv string, rc bool) {
+func cmdExec(command string, args []string, timeoutSeconds int32) (rv string, rc bool) {
 	cmd := exec.Cmd{Path: command, Args: args}
 
 	var stdoutput bytes.Buffer
 	var stderror bytes.Buffer
 	cmd.Stdout = &stdoutput
 	cmd.Stderr = &stderror
-	if err := cmd.Run(); err != nil {
-		outputstr := stdoutput.String()
-		errstr := stderror.String()
-		fmt.Println("Failed to run", outputstr, "error:", errstr, err)
+
+	cmd.Start() 
+
+	done := make(chan error)
+	go func() {done <- cmd.Wait()} ()
+
+	timeout := time.After( time.Duration(timeoutSeconds) * time.Second)
+
+	select {
+	case <-timeout:
+		// Timeout happened first, kill the process and print a message.
+		cmd.Process.Kill()
+		fmt.Println("Command timed out")
+		return
+	case err := <-done:
+		// Command completed before timeout. Print output and error if it exists.
+		if err != nil {
+			outputstr := stdoutput.String()
+			errstr := stderror.String()
+			fmt.Println("Failed to run", outputstr, "error:", errstr, err)
+			return
+		}
+
+		rv = stdoutput.String()
+		if command == fortioPath {
+			rv = stderror.String()
+		}
+		fmt.Println(rv)
+		rc = true
 		return
 	}
-
-	rv = stdoutput.String()
-	if command == fortioPath {
-		rv = stderror.String()
-	}
-	fmt.Println(rv)
-	rc = true
-	return
 }
