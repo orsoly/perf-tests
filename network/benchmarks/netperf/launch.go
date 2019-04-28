@@ -56,19 +56,21 @@ const (
 )
 
 var (
-	iterations         int
-	hostnetworking     bool
-	tag                string
-	kubeConfig         string
-	netperfImage       string
-	cleanupOnly        bool
-	backgroundPods     int
-	backgroundPodImage string
-	extraServices      int
-	extraNetperfPods   int
-	ingressNPs         int
-	egressNPs          int
-	mssStepSize		   int
+	iterations         		int
+	hostnetworking     		bool
+	tag                		string
+	kubeConfig         		string
+	netperfImage       		string
+	cleanupOnly        		bool
+	backgroundPods     		int
+	backgroundPodImage 		string
+	extraServices      		int
+	extraNetperfPods   		int
+	ingressNPs         		int
+	egressNPs          		int
+	mssStepSize		   		int
+	testparameters	   		string
+	testparameterValues		string
 
 	everythingSelector metav1.ListOptions = metav1.ListOptions{}
 
@@ -103,6 +105,9 @@ func init() {
 		"Number of egress policies to run")
 	flag.IntVar(&mssStepSize, "mssStepSize", 0,
 		"Step size of TCP MSS")
+
+	testparameters = "iterations,kubeConfig,netperfImage,backgroundPods,backgroundPodImage,extraServices,extraNetperfPods,ingressNPs,egressNPs,mssStepSize"
+	testparameterValues = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,", iterations,kubeConfig,netperfImage,backgroundPods,backgroundPodImage,extraServices,extraNetperfPods,ingressNPs,egressNPs,mssStepSize )
 }
 
 func setupClient() *kubernetes.Clientset {
@@ -348,6 +353,8 @@ func createRCs(c *kubernetes.Clientset) bool {
 											     {Name: "mssStepSize", Value: fmt.Sprintf("%d", mssStepSize)},
 												 {Name: "iperf3NodePort", Value: fmt.Sprintf("%d", iperf3NodePort)},
 												 {Name: "fortioNodePort", Value: fmt.Sprintf("%d", fortioNodePort)},
+												 {Name: "testparameters", Value: testparameters},
+												 {Name: "testparameterValues", Value: testparameterValues},
 											 },
 							ImagePullPolicy: "Always",
 						},

@@ -57,6 +57,8 @@ var secondaryNodeIP string
 var iperf3NodePort string
 var fortioNodePort string
 var mssStepSize int
+var testparameters string
+var testparameterValues string
 
 var workerStateMap map[string]*workerState
 
@@ -169,6 +171,9 @@ func init() {
 	flag.StringVar(&mode, "mode", "worker", "Mode for the daemon (worker | orchestrator)")
 	flag.StringVar(&port, "port", rpcServicePort, "Port to listen on (defaults to 5202)")
 	flag.StringVar(&host, "host", "", "IP address to bind to (defaults to 0.0.0.0)")
+
+	testparameters = os.Getenv("testparameters")
+	testparameterValues = os.Getenv("testparameterValues")
 
 	var err error
 
@@ -508,6 +513,12 @@ func flushDataPointsToCsv() {
 		fmt.Println(buffer)
 		buffer = ""	
 	}
+
+	buffer = fmt.Sprintf("%s,%s", 0, testparameters)
+	fmt.Println(buffer)
+	buffer = buffer + fmt.Sprintf("%s,%s", len(dataPointKeys)+1, testparameterValues)
+	fmt.Println(buffer)
+
 	fmt.Println("END CSV DATA")
 }
 
