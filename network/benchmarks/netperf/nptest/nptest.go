@@ -714,6 +714,7 @@ func startWork() {
 		var timeout time.Duration
 		var client *rpc.Client
 		var err error
+		var maxIdleTime time.Duration = 30
 
 		timeout = 5
 		for true {
@@ -726,7 +727,8 @@ func startWork() {
 			time.Sleep(timeout * time.Second)
 		}
 
-		for true {
+		timeout = 0
+		for timeout < maxIdleTime {
 			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP(), PrimaryNodeIP: primaryNodeIP, SecondaryNodeIP: secondaryNodeIP}
 			var workItem WorkItem
 			if err := client.Call("NetPerfRpc.RegisterClient", clientData, &workItem); err != nil {
@@ -738,9 +740,11 @@ func startWork() {
 			switch {
 			case workItem.IsIdle == true:
 				time.Sleep(5 * time.Second)
+				timeout += 5
 				continue
 
 			case workItem.IsServerItem == true:
+				timeout = 0
 				fmt.Println("Orchestrator requests worker run iperf and netperf servers")
 				go iperfServer()
 				go netperfServer()
@@ -748,6 +752,7 @@ func startWork() {
 				time.Sleep(1 * time.Second)
 
 			case workItem.IsClientItem == true:
+				timeout = 0
 				handleClientWorkItem(client, &workItem)
 			}
 		}
