@@ -613,7 +613,7 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 		registerDataPoint(data.Type, testcase.Index, testcase.Label, "50%", res[3])
 		registerDataPoint(data.Type, testcase.Index, testcase.Label, "75%", res[4])
 		registerDataPoint(data.Type, testcase.Index, testcase.Label, "99%", res[5])
-		registerDataPoint(data.Type, testcase.Index, testcase.Label, "99,9%", res[6])
+		registerDataPoint(data.Type, testcase.Index, testcase.Label, "99.9%", res[6])
 		testcases[currentJobIndex].Finished = true
 	case pingTest:
 		outputLog = outputLog + fmt.Sprintln("Received ping output from worker", data.Worker, "for test", testcase.Label,
@@ -632,7 +632,7 @@ func (t *NetPerfRpc) ReceiveOutput(data *WorkerOutput, reply *int) error {
 	case iperfTcpTest:
 		fmt.Println("Jobdone from worker", data.Worker, "Bandwidth was", bw, "Mbits/sec. CPU usage sender was", cpuSender, "%. CPU usage receiver was", cpuReceiver, "%.")
 	case fortioTest:
-		fmt.Println("Jobdone from worker", data.Worker, "avg", res[1] , "dev", res[2], "50%", res[3], "75%", res[4], "99%", res[5], "99,9%", res[6])
+		fmt.Println("Jobdone from worker", data.Worker, "avg", res[1] , "dev", res[2], "50%", res[3], "75%", res[4], "99%", res[5], "99.9%", res[6])
 	case pingTest:
 		fmt.Println("Jobdone from worker", data.Worker, "loss", res[1] , "ms min", res[2], "ms avg", res[3], "ms max", res[4], "ms mdev", res[5], "ms")
 	default:
