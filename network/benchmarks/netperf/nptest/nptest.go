@@ -34,6 +34,7 @@ import (
 	"net/rpc"
 	"os"
 	"os/exec"
+	"context"
 	"regexp"
 	"strconv"
 	"sync"
@@ -722,12 +723,11 @@ func handleClientWorkItem(client *rpc.Client, workItem *WorkItem) {
 // startWork : Entry point to the worker infinite loop
 func startWork() {
 	for true {	
-		var timeout time.Duration
+		var sleep time.Duration
 		var client *rpc.Client
 		var err error
-		var maxIdleTime time.Duration = 30
 
-		timeout = 5
+		sleep = 5
 		for true {
 			fmt.Println("Attempting to connect to orchestrator at", host)
 			client, err = rpc.DialHTTP("tcp", host+":"+port)
@@ -735,11 +735,10 @@ func startWork() {
 				break
 			}
 			fmt.Println("RPC connection to ", host, " failed:", err)
-			time.Sleep(timeout * time.Second)
+			time.Sleep(sleep * time.Second)
 		}
 
-		timeout = 0
-		for timeout < maxIdleTime {
+		for true {
 			clientData := ClientRegistrationData{Host: podname, KubeNode: kubenode, Worker: worker, IP: getMyIP(), PrimaryNodeIP: primaryNodeIP, SecondaryNodeIP: secondaryNodeIP}
 			var workItem WorkItem
 			if err := client.Call("NetPerfRpc.RegisterClient", clientData, &workItem); err != nil {
@@ -751,11 +750,9 @@ func startWork() {
 			switch {
 			case workItem.IsIdle == true:
 				time.Sleep(5 * time.Second)
-				timeout += 5
 				continue
 
 			case workItem.IsServerItem == true:
-				timeout = 0
 				fmt.Println("Orchestrator requests worker run iperf and netperf servers")
 				go iperfServer()
 				go netperfServer()
@@ -763,7 +760,6 @@ func startWork() {
 				time.Sleep(1 * time.Second)
 
 			case workItem.IsClientItem == true:
-				timeout = 0
 				handleClientWorkItem(client, &workItem)
 			}
 		}
@@ -855,41 +851,34 @@ func pingClient(serverHost string, serverPort string, workItemType int) (rv stri
 }
 
 func cmdExec(command string, args []string, timeoutSeconds int32) (rv string, rc bool) {
-	cmd := exec.Cmd{Path: command, Args: args}
 
 	var stdoutput bytes.Buffer
 	var stderror bytes.Buffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, command, args...)
+	
 	cmd.Stdout = &stdoutput
 	cmd.Stderr = &stderror
 
-	cmd.Start() 
-
-	done := make(chan error)
-	go func() {done <- cmd.Wait()} ()
-
-	timeout := time.After( time.Duration(timeoutSeconds) * time.Second)
-
-	select {
-	case <-timeout:
-		// Timeout happened first, kill the process and print a message.
-		cmd.Process.Kill()
-		fmt.Println("Command timed out")
-		return
-	case err := <-done:
-		// Command completed before timeout. Print output and error if it exists.
-		if err != nil {
-			outputstr := stdoutput.String()
-			errstr := stderror.String()
-			fmt.Println("Failed to run", outputstr, "error:", errstr, err)
-			return
-		}
-
-		rv = stdoutput.String()
-		if command == fortioPath {
-			rv = stderror.String()
-		}
-		fmt.Println(rv)
-		rc = true
+	if err := cmd.Run(); err != nil {
+		outputstr := stdoutput.String()
+		errstr := stderror.String()
+		fmt.Println("Failed to run", outputstr, "error:", errstr, err)
 		return
 	}
+
+
+	if ctx.Err() == context.DeadlineExceeded {
+		fmt.Println("Command timed out")
+		return
+	}
+
+
+
+	rv = stdoutput.String()
+	rc = true
+	return
 }
