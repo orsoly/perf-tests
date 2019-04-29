@@ -160,6 +160,8 @@ type testcase struct {
 	Label            string
 	ClusterIP        bool
 	Finished         bool
+	RetryCount		 int
+	Failed           bool
 	MSS              int
 	Type             int
 	UsePrimaryNodeIP bool
@@ -314,14 +316,34 @@ func allocateWorkToClient(workerS *workerState, reply *WorkItem) {
 
 	// System is all idle - pick up next work item to allocate to client
 	for n, v := range testcases {
-		if v.Finished {
+		if v.Finished || v.Failed{
 			continue
 		}
 		if v.SourceNode != workerS.worker {
+			if v.RetryCount >= 5	{
+				v.Failed = true
+				
+				registerDataPoint(v.Type, v.Index, v.Label, "Failed Test", "failed")
+				fmt.Printf("Testcase failed. Source Node %s for jobrun %s did not apply. Continue...", v.DestinationNode, v.Index,)
+				fmt.Println("")
+				return
+			}	
+			v.RetryCount++
+			fmt.Println("Source node not applying. Retrying(%d)...", v.RetryCount)
 			reply.IsIdle = true
 			return
 		}
 		if _, ok := workerStateMap[v.DestinationNode]; !ok {
+			if v.RetryCount >= 5	{
+				v.Failed = true
+				registerDataPoint(v.Type, v.Index, v.Label, "Failed Test", "failed")
+				fmt.Printf("Testcase failed. State of destination Node %s for jobrun %s is not ok. Continue...", v.DestinationNode, v.Index,)
+				fmt.Println("")
+				return
+			}	
+			v.RetryCount++
+			fmt.Printf("State of destination Node %s for jobrun %s is not ok. Retrying(%d)...", v.DestinationNode, v.Index, v.RetryCount)
+			fmt.Println("")
 			reply.IsIdle = true
 			return
 		}
@@ -450,6 +472,12 @@ func flushDataPointsToCsv() {
 	var iperfTcpHeader, netperfHeader, fortioHeader, pingHeader bool = false, false, false, false
 
 	for _, index := range dataPointKeys {
+		i, err := strconv.Atoi(index)
+		if err != nil {}
+		if testcases[i].Failed {
+			fmt.Println("%s,%s,Failed", index, testcases[i].Label)
+			continue
+		}
 		for _, dp := range dataPoints[index] {
 			switch dp._type{
 				case iperfTcpTest:
