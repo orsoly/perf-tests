@@ -454,9 +454,9 @@ func flushDataPointsToCsv() {
 				case iperfTcpTest:
 					if !iperfTcpHeader {
 						//Header for iperf tcp test cases
-						buffer = fmt.Sprintf("%s,,", "0")
+						buffer = fmt.Sprintf("%s,Label,", "0")
 						for _, p := range dataPoints[index] {
-							buffer = buffer + fmt.Sprintf("%s,", p.key)
+							buffer = buffer + fmt.Sprintf("%sMSS,", p.key)
 						}
 						fmt.Println(buffer)
 						buffer = ""
@@ -469,7 +469,7 @@ func flushDataPointsToCsv() {
 				case iperfUdpTest, netperfTest:
 					if !netperfHeader {
 						//Header for iperf udp and netperf test cases
-						buffer = fmt.Sprintf("%s,,Bandwidth", "0")
+						buffer = fmt.Sprintf("%s,Label,Bandwidth", "0")
 						fmt.Println(buffer)
 						buffer = ""
 						netperfHeader = true
@@ -481,7 +481,7 @@ func flushDataPointsToCsv() {
 				case fortioTest:
 					if !fortioHeader {
 						//Header for fortio test cases
-						buffer = fmt.Sprintf("0,,")
+						buffer = fmt.Sprintf("0,Label,")
 						for _, p := range dataPoints[index] {
 							buffer = buffer + fmt.Sprintf("%s,", p.key)
 						}
@@ -496,7 +496,7 @@ func flushDataPointsToCsv() {
 				case pingTest:
 					if !pingHeader {
 						//Header for ping test cases
-						buffer = fmt.Sprintf("%s,,", "0")
+						buffer = fmt.Sprintf("%s,Label,", "0")
 						for _, p := range dataPoints[index] {
 							buffer = buffer + fmt.Sprintf("%s,", p.key)
 						}
@@ -514,9 +514,9 @@ func flushDataPointsToCsv() {
 		buffer = ""	
 	}
 
-	buffer = fmt.Sprintf("%s,%s", 0, testparameters)
+	buffer = fmt.Sprintf("%s,%s", "0", testparameters)
 	fmt.Println(buffer)
-	buffer = buffer + fmt.Sprintf("%s,%s", len(dataPointKeys)+1, testparameterValues)
+	buffer = fmt.Sprintf("%d,%s", len(dataPointKeys)+1, testparameterValues)
 	fmt.Println(buffer)
 
 	fmt.Println("END CSV DATA")

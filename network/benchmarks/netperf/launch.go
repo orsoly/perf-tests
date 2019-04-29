@@ -107,7 +107,7 @@ func init() {
 		"Step size of TCP MSS")
 
 	testparameters = "iterations,kubeConfig,netperfImage,backgroundPods,backgroundPodImage,extraServices,extraNetperfPods,ingressNPs,egressNPs,mssStepSize"
-	testparameterValues = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,", iterations,kubeConfig,netperfImage,backgroundPods,backgroundPodImage,extraServices,extraNetperfPods,ingressNPs,egressNPs,mssStepSize )
+	testparameterValues = fmt.Sprintf("%d,%s,%s,%d,%s,%d,%d,%d,%d,%d,", iterations,kubeConfig,netperfImage,backgroundPods,backgroundPodImage,extraServices,extraNetperfPods,ingressNPs,egressNPs,mssStepSize )
 }
 
 func setupClient() *kubernetes.Clientset {
